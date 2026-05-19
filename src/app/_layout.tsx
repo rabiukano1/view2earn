@@ -1,15 +1,39 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import { useColorScheme } from 'react-native';
+import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+import { MockDataProvider } from '@/context/MockDataContext';
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+export default function RootLayout() {
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+    <MockDataProvider>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen
+          name="social-connect"
+          options={{ animation: 'slide_from_right' }}
+        />
+        <Stack.Screen
+          name="buy-followers"
+          options={{ animation: 'slide_from_right' }}
+        />
+        <Stack.Screen
+          name="follow-to-earn"
+          options={{ animation: 'slide_from_right' }}
+        />
+        <Stack.Screen
+          name="follower-orders"
+          options={{ animation: 'slide_from_right' }}
+        />
+        <Stack.Screen
+          name="profile"
+          options={{ animation: 'slide_from_right' }}
+        />
+        <Stack.Screen
+          name="admin-panel"
+          options={{ animation: 'slide_from_right' }}
+        />
+      </Stack>
+      <StatusBar style="light" />
+    </MockDataProvider>
   );
 }
