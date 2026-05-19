@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
+import { SmartHeader } from '@/components/smart-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
@@ -14,12 +15,14 @@ const PLATFORM_CONFIG: Record<PlatformType, { color: string; icon: keyof typeof 
   facebook: { color: '#1877F2', icon: 'logo-facebook' },
   tiktok: { color: '#000000', icon: 'musical-notes' },
   telegram: { color: '#0088CC', icon: 'paper-plane' },
+  youtube: { color: '#FF0000', icon: 'logo-youtube' },
 };
 
 const PLATFORMS: { key: PlatformType; label: string; subtitle: string }[] = [
   { key: 'facebook', label: 'Connect Facebook', subtitle: 'Link your Facebook page' },
   { key: 'tiktok', label: 'Connect TikTok', subtitle: 'Link your TikTok channel' },
   { key: 'telegram', label: 'Connect Telegram', subtitle: 'Link your Telegram channel' },
+  { key: 'youtube', label: 'Connect YouTube', subtitle: 'Link your YouTube channel' },
 ];
 
 export default function SocialConnectScreen() {
@@ -66,17 +69,18 @@ export default function SocialConnectScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={theme.text} />
-        </Pressable>
-        <View style={styles.headerText}>
-          <ThemedText type="subtitle" style={styles.headerTitle}>Connect Social Accounts</ThemedText>
-          <ThemedText themeColor="textSecondary" style={styles.headerSubtitle}>
-            Link your channels to start earning and growing
-          </ThemedText>
-        </View>
-      </View>
+      <SmartHeader
+        title="Connect Social Accounts"
+        subtitle="Link your channels to start earning and growing"
+        rightContent={
+          <View style={styles.followersChip}>
+            <Ionicons name="people" size={14} color="#2ECC71" />
+            <ThemedText style={styles.followersChipText}>
+              {totalFollowers.toLocaleString()}
+            </ThemedText>
+          </View>
+        }
+      />
 
       <ScrollView
         style={styles.scroll}
@@ -192,30 +196,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
+  followersChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16,
+    backgroundColor: '#2ECC7120',
   },
-  backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  headerText: {
-    gap: 4,
-  },
-  headerTitle: {
-    fontSize: 28,
-    lineHeight: 34,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-  },
+  followersChipText: { fontSize: 13, fontWeight: '700', color: '#2ECC71' },
   scroll: {
     flex: 1,
   },

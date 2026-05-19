@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +16,7 @@ import Animated, {
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { RewardToast } from '@/components/reward-toast';
 import { useTheme } from '@/hooks/use-theme';
 import { useAdReward } from '@/hooks/use-ad-reward';
 import { useMockData } from '@/context/MockDataContext';
@@ -50,6 +51,7 @@ export default function DashboardScreen() {
   const theme = useTheme();
   const { state, dispatch } = useMockData();
   const [adsLeft, setAdsLeft] = useState(3);
+  const [showReward, setShowReward] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = useCallback(() => {
@@ -91,7 +93,7 @@ export default function DashboardScreen() {
   const earnReward = useCallback(() => {
     setAdsLeft(prev => prev - 1);
     dispatch({ type: 'SET_BALANCE', balance: state.balance + 25 });
-    Alert.alert('+25 PTS', 'You earned 25 points for watching an ad!');
+    setShowReward(true);
   }, [dispatch, state.balance]);
 
   const { showAd, adOverlay } = useAdReward(earnReward);
@@ -137,26 +139,24 @@ export default function DashboardScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingTop: insets.top + 8, paddingBottom: 100 },
-        ]}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2ECC71" colors={["#2ECC71"]} />}
-      >
-        <Animated.View entering={FadeInUp.springify().damping(15)}>
+      <Animated.View entering={FadeInUp.springify().damping(15)}>
+        <View style={[styles.topBarWrapper, { paddingTop: insets.top }]}>
+          <LinearGradient
+            colors={['rgba(46,204,113,0.12)', 'transparent']}
+            style={styles.headerGlow}
+          />
           <View style={styles.topBar}>
             <View>
-              <ThemedText style={styles.greeting}>Good evening</ThemedText>
+              <ThemedText style={styles.greeting}>
+                {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening'}
+              </ThemedText>
               <ThemedText type="small" themeColor="textSecondary" style={styles.greetingSub}>
                 Ready to earn today?
               </ThemedText>
             </View>
             <View style={styles.topRight}>
               <Pressable style={styles.iconBtn}>
-                <Ionicons name="notifications-outline" size={22} color={theme.text} />
+                <Ionicons name="notifications-outline" size={20} color="#fff" />
                 <View style={styles.notifDot} />
               </Pressable>
               <Pressable onPress={() => router.push('/profile')} style={styles.avatar}>
@@ -164,12 +164,22 @@ export default function DashboardScreen() {
                   colors={['#2ECC71', '#27ae60']}
                   style={styles.avatarGradient}
                 >
-                  <Ionicons name="person" size={18} color="#000" />
+                  <Ionicons name="person" size={14} color="#000" />
                 </LinearGradient>
               </Pressable>
             </View>
           </View>
-        </Animated.View>
+        </View>
+      </Animated.View>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: 8, paddingBottom: 100 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2ECC71" colors={["#2ECC71"]} />}
+      >
 
         <Animated.View entering={FadeInUp.delay(100).springify().damping(15)}>
           <LinearGradient
@@ -309,6 +319,11 @@ export default function DashboardScreen() {
           </ThemedView>
         </Animated.View>
       </ScrollView>
+      <RewardToast
+        visible={showReward}
+        points={25}
+        onDismiss={() => setShowReward(false)}
+      />
       {adOverlay}
     </View>
   );
@@ -320,14 +335,23 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: 16, gap: 20 },
 
   // Top Bar
+  topBarWrapper: {
+    backgroundColor: '#0a0a0f',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(46,204,113,0.08)',
+  },
+  headerGlow: {
+    position: 'absolute', top: 0, left: 0, right: 0, height: 160,
+  },
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingBottom: 4,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
   },
-  greeting: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
-  greetingSub: { fontSize: 13, marginTop: 2 },
+  greeting: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5, color: '#fff' },
+  greetingSub: { fontSize: 13, marginTop: 2, color: '#8B949E' },
   topRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   notifDot: {

@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 
+import { SmartHeader } from '@/components/smart-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
@@ -14,12 +15,14 @@ const PLATFORM_ICONS: Record<PlatformType, keyof typeof Ionicons.glyphMap> = {
   facebook: 'logo-facebook',
   tiktok: 'musical-notes',
   telegram: 'paper-plane',
+  youtube: 'logo-youtube',
 };
 
 const PLATFORM_COLORS: Record<PlatformType, string> = {
   facebook: '#1877F2',
   tiktok: '#000000',
   telegram: '#0088CC',
+  youtube: '#FF0000',
 };
 
 export default function FollowToEarnScreen() {
@@ -78,18 +81,16 @@ export default function FollowToEarnScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <View style={styles.headerTop}>
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={24} color={theme.text} />
-          </Pressable>
-          <ThemedText type="subtitle" style={styles.headerTitle}>Follow & Earn</ThemedText>
+      <SmartHeader
+        title="Follow & Earn"
+        subtitle="Complete tasks to earn PTS"
+        rightContent={
           <View style={styles.earnedBadge}>
             <Ionicons name="flash" size={14} color="#F59E0B" />
             <ThemedText style={styles.earnedText}>+{totalDailyEarnings} today</ThemedText>
           </View>
-        </View>
-      </View>
+        }
+      />
 
       <ScrollView
         style={styles.scroll}
@@ -234,29 +235,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  },
-  headerTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    fontSize: 28,
-    lineHeight: 34,
-  },
   earnedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -268,7 +246,7 @@ const styles = StyleSheet.create({
   },
   earnedText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#F59E0B',
   },
   scroll: {

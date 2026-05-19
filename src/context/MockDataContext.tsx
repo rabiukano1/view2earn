@@ -1,6 +1,6 @@
 import { createContext, useContext, useReducer, ReactNode } from 'react';
 
-export type PlatformType = 'facebook' | 'tiktok' | 'telegram';
+export type PlatformType = 'facebook' | 'tiktok' | 'telegram' | 'youtube';
 export type OrderStatus = 'pending' | 'in-progress' | 'completed' | 'cancelled';
 
 export interface ConnectedAccount {
@@ -66,12 +66,14 @@ const PLATFORM_USERNAMES: Record<PlatformType, string[]> = {
   facebook: ['demo.user', 'john.doe', 'jane.smith'],
   tiktok: ['@demouser_official', '@john_doe', '@jane_smith'],
   telegram: ['demo_user', 'john_doe', 'jane_smith'],
+  youtube: ['@DemoUserYT', '@JohnDoeYT', '@JaneSmithYT'],
 };
 
 const PLATFORM_DISPLAY: Record<PlatformType, string[]> = {
   facebook: ['Demo User', 'John Doe', 'Jane Smith'],
   tiktok: ['Demo User', 'John Doe', 'Jane Smith'],
   telegram: ['Demo User', 'John Doe', 'Jane Smith'],
+  youtube: ['Demo User', 'John Doe', 'Jane Smith'],
 };
 
 const FOLLOW_TASKS: FollowTask[] = [
@@ -87,11 +89,14 @@ const FOLLOW_TASKS: FollowTask[] = [
   { id: 'task-10', platform: 'tiktok', channelName: 'Pet Lovers', category: 'Animals', reward: 25, followers: '9.7K' },
   { id: 'task-11', platform: 'facebook', channelName: 'Fashion Trends', category: 'Fashion', reward: 15, followers: '33K' },
   { id: 'task-12', platform: 'tiktok', channelName: 'Music Discovery', category: 'Music', reward: 25, followers: '18K' },
+  { id: 'task-13', platform: 'youtube', channelName: 'Tech Unboxed', category: 'Tech', reward: 25, followers: '2.1M' },
 ];
 
 const initialAccounts: ConnectedAccount[] = [
   { id: 'acct-1', platform: 'facebook', username: 'demo.user', displayName: 'Demo User', isConnected: true, followersCount: 845 },
   { id: 'acct-2', platform: 'tiktok', username: '@demouser_official', displayName: 'Demo User', isConnected: true, followersCount: 389 },
+  { id: 'acct-3', platform: 'telegram', username: '@demo_user_tg', displayName: 'Demo User', isConnected: true, followersCount: 512 },
+  { id: 'acct-4', platform: 'youtube', username: '@DemoUserYT', displayName: 'Demo User', isConnected: true, followersCount: 1240 },
 ];
 
 const initialOrders: FollowerOrder[] = [

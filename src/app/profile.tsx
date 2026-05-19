@@ -1,10 +1,11 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
+import { SmartHeader } from '@/components/smart-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
@@ -36,9 +37,22 @@ export default function ProfileScreen() {
     setTimeout(() => setRefreshing(false), 1000);
   }, []);
 
+  const adminTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const handleAvatarPress = useCallback(() => {
-    Alert.alert('Change Avatar', 'Avatar upload coming soon!');
-  }, []);
+    const newCount = adminTapCount + 1;
+    setAdminTapCount(newCount);
+
+    if (adminTapTimer.current) clearTimeout(adminTapTimer.current);
+    adminTapTimer.current = setTimeout(() => setAdminTapCount(0), 3000);
+
+    if (newCount >= 7) {
+      setAdminTapCount(0);
+      router.push('/admin-panel');
+    } else {
+      Alert.alert('Profile', `Tap ${7 - newCount} more time${7 - newCount === 1 ? '' : 's'} to unlock admin panel`);
+    }
+  }, [adminTapCount]);
 
   const handleCopy = useCallback((label: string, value: string) => {
     Alert.alert('Copied', `${label}: ${value}`);
@@ -51,28 +65,18 @@ export default function ProfileScreen() {
     ]);
   }, []);
 
-  const handleAdminTap = useCallback(() => {
-    const newCount = adminTapCount + 1;
-    setAdminTapCount(newCount);
-    if (newCount >= 7) {
-      setAdminTapCount(0);
-      router.push('/admin-panel');
-    }
-  }, [adminTapCount]);
-
   const activeOrders = state.orders.filter(o => o.status === 'pending' || o.status === 'in-progress').length;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={theme.text} />
-        </Pressable>
-        <ThemedText type="subtitle" style={styles.headerTitle}>Profile</ThemedText>
-        <Pressable onPress={() => {}} style={styles.settingsBtn}>
-          <Ionicons name="settings-outline" size={22} color={theme.textSecondary} />
-        </Pressable>
-      </View>
+      <SmartHeader
+        title="Profile"
+        rightContent={
+          <Pressable onPress={() => {}} style={styles.settingsBtn}>
+            <Ionicons name="settings-outline" size={22} color={theme.textSecondary} />
+          </Pressable>
+        }
+      />
 
       <ScrollView
         style={styles.scroll}
@@ -205,9 +209,9 @@ export default function ProfileScreen() {
               <Ionicons name="log-out-outline" size={20} color="#EF4444" />
               <ThemedText style={styles.logoutText}>Log Out</ThemedText>
             </Pressable>
-            <Pressable onPress={handleAdminTap} style={styles.versionRow}>
+            <View style={styles.versionRow}>
               <ThemedText type="small" themeColor="textSecondary">VIEW2EARN v1.0.0</ThemedText>
-            </Pressable>
+            </View>
           </ThemedView>
         </Animated.View>
       </ScrollView>
@@ -218,27 +222,6 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    gap: 12,
-  },
-  backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    fontSize: 28,
-    lineHeight: 34,
   },
   settingsBtn: {
     width: 42,

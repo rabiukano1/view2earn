@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
+import { SmartHeader } from '@/components/smart-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
@@ -16,6 +17,7 @@ const PLATFORM_ICONS: Record<PlatformType, keyof typeof Ionicons.glyphMap> = {
   facebook: 'logo-facebook',
   tiktok: 'musical-notes',
   telegram: 'paper-plane',
+  youtube: 'logo-youtube',
 };
 
 export default function AdminPanelScreen() {
@@ -79,12 +81,7 @@ export default function AdminPanelScreen() {
   if (!authenticated) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={24} color={theme.text} />
-          </Pressable>
-          <ThemedText type="subtitle" style={styles.headerTitle}>Admin Panel</ThemedText>
-        </View>
+        <SmartHeader title="Admin Panel" />
         <View style={styles.lockScreen}>
           <Ionicons name="lock-closed" size={60} color={theme.textSecondary} />
           <ThemedText type="smallBold" style={styles.lockTitle}>Access Denied</ThemedText>
@@ -110,16 +107,16 @@ export default function AdminPanelScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={theme.text} />
-        </Pressable>
-        <ThemedText type="subtitle" style={styles.headerTitle}>Admin Panel</ThemedText>
-        <View style={styles.adminBadge}>
-          <Ionicons name="shield-checkmark" size={16} color="#F59E0B" />
-          <ThemedText style={styles.adminBadgeText}>Admin</ThemedText>
-        </View>
-      </View>
+      <SmartHeader
+        title="Admin Panel"
+        subtitle="Manage orders and escrow"
+        rightContent={
+          <View style={styles.adminBadge}>
+            <Ionicons name="shield-checkmark" size={16} color="#F59E0B" />
+            <ThemedText style={styles.adminBadgeText}>Admin</ThemedText>
+          </View>
+        }
+      />
 
       <ScrollView
         style={styles.scroll}
@@ -378,27 +375,6 @@ export default function AdminPanelScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    gap: 12,
-  },
-  backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    fontSize: 28,
-    lineHeight: 34,
   },
   adminBadge: {
     flexDirection: 'row',

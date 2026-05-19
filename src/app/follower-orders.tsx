@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown, SlideInRight, SlideInLeft } from 'react-native-reanimated';
 
+import { SmartHeader } from '@/components/smart-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
@@ -16,6 +17,7 @@ const PLATFORM_ICONS: Record<PlatformType, keyof typeof Ionicons.glyphMap> = {
   facebook: 'logo-facebook',
   tiktok: 'musical-notes',
   telegram: 'paper-plane',
+  youtube: 'logo-youtube',
 };
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; bg: string }> = {
@@ -158,20 +160,18 @@ export default function FollowerOrdersScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <View style={styles.headerTop}>
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={24} color={theme.text} />
-          </Pressable>
-          <ThemedText type="subtitle" style={styles.headerTitle}>My Orders</ThemedText>
+      <SmartHeader
+        title="My Orders"
+        subtitle="Track your follower purchases"
+        rightContent={
           <Pressable
             onPress={() => router.push('/buy-followers')}
             style={styles.addButton}
           >
             <Ionicons name="add" size={22} color="#2ECC71" />
           </Pressable>
-        </View>
-      </View>
+        }
+      />
 
       <View style={[styles.tabBar, { borderBottomColor: theme.textSecondary + '20' }]}>
         {tabs.map(tab => (
@@ -234,29 +234,6 @@ export default function FollowerOrdersScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  },
-  headerTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    fontSize: 28,
-    lineHeight: 34,
   },
   addButton: {
     width: 42,
