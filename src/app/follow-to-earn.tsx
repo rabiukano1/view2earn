@@ -1,11 +1,11 @@
 import { useState, useCallback, useMemo } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 
 import { SmartHeader } from '@/components/smart-header';
+import { ClaimToast } from '@/components/claim-toast';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
@@ -30,6 +30,7 @@ export default function FollowToEarnScreen() {
   const theme = useTheme();
   const { state, dispatch } = useMockData();
   const [loadingTask, setLoadingTask] = useState<string | null>(null);
+  const [claimTask, setClaimTask] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = useCallback(() => {
@@ -58,24 +59,11 @@ export default function FollowToEarnScreen() {
     setLoadingTask(taskId);
     setTimeout(() => {
       setLoadingTask(null);
-      const task = state.followTasks.find(t => t.id === taskId);
-      if (!task) return;
-
-      Alert.alert(
-        'Follow to Earn',
-        `Follow ${task.channelName} on ${task.platform} to claim your reward!`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'I Followed',
-            onPress: () => {
-              dispatch({ type: 'COMPLETE_FOLLOW_TASK', taskId });
-            },
-          },
-        ]
-      );
+      setClaimTask(taskId);
     }, 1500);
-  }, [state.followTasks, dispatch]);
+  }, []);
+
+  const currentClaim = claimTask ? state.followTasks.find(t => t.id === claimTask) : null;
 
   const progressPercent = (state.completedFollowTasks.length / 10) * 100;
 
@@ -227,6 +215,20 @@ export default function FollowToEarnScreen() {
           </>
         )}
       </ScrollView>
+      <ClaimToast
+        visible={!!currentClaim}
+        channelName={currentClaim?.channelName ?? ''}
+        platform={currentClaim?.platform ?? 'facebook'}
+        reward={currentClaim?.reward ?? 0}
+        pageUrl={currentClaim?.pageUrl}
+        onConfirm={() => {
+          if (claimTask) {
+            dispatch({ type: 'COMPLETE_FOLLOW_TASK', taskId: claimTask });
+          }
+          setClaimTask(null);
+        }}
+        onCancel={() => setClaimTask(null)}
+      />
     </View>
   );
 }

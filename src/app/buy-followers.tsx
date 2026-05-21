@@ -10,7 +10,7 @@ import { SmartHeader } from '@/components/smart-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
-import { useMockData, PlatformType, FollowerOrder } from '@/context/MockDataContext';
+import { useMockData, PlatformType, FollowerOrder, FollowTask } from '@/context/MockDataContext';
 
 interface Package {
   id: string;
@@ -29,11 +29,11 @@ const PACKAGES: Package[] = [
   { id: 'pkg-6', followers: 5000, cost: 10000, deliveryTime: '~72h' },
 ];
 
-const PLATFORM_CONFIG: Record<PlatformType, { icon: keyof typeof Ionicons.glyphMap; color: string; gradient: readonly [string, string] }> = {
-  facebook: { icon: 'logo-facebook', color: '#1877F2', gradient: ['#1877F2', '#0D65D9'] as const },
-  tiktok: { icon: 'musical-notes', color: '#000', gradient: ['#2D2D2D', '#000'] as const },
-  telegram: { icon: 'paper-plane', color: '#0088CC', gradient: ['#0088CC', '#006699'] as const },
-  youtube: { icon: 'logo-youtube', color: '#FF0000', gradient: ['#FF0000', '#CC0000'] as const },
+const PLATFORM_CONFIG: Record<PlatformType, { icon: keyof typeof Ionicons.glyphMap; color: string; gradient: readonly [string, string]; domains: readonly string[]; urlPattern: string }> = {
+  facebook: { icon: 'logo-facebook', color: '#1877F2', gradient: ['#1877F2', '#0D65D9'] as const, domains: ['facebook.com', 'fb.com'], urlPattern: 'facebook.com/[username]' },
+  tiktok: { icon: 'musical-notes', color: '#000', gradient: ['#2D2D2D', '#000'] as const, domains: ['tiktok.com'], urlPattern: 'tiktok.com/@[username]' },
+  telegram: { icon: 'paper-plane', color: '#0088CC', gradient: ['#0088CC', '#006699'] as const, domains: ['t.me', 'telegram.me'], urlPattern: 't.me/[username]' },
+  youtube: { icon: 'logo-youtube', color: '#FF0000', gradient: ['#FF0000', '#CC0000'] as const, domains: ['youtube.com', 'youtu.be'], urlPattern: 'youtube.com/@[username]' },
 };
 
 export default function BuyFollowersScreen() {
@@ -49,6 +49,8 @@ export default function BuyFollowersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [platformDropdownOpen, setPlatformDropdownOpen] = useState(false);
+  const [channelUrl, setChannelUrl] = useState('');
+  const [urlTouched, setUrlTouched] = useState(false);
   const dropdownHeight = useSharedValue(0);
 
   const onRefresh = useCallback(() => {
@@ -58,12 +60,36 @@ export default function BuyFollowersScreen() {
 
   const connectedPlatforms = state.connectedAccounts.filter(a => a.isConnected);
 
+  const urlValidation = useCallback(() => {
+    if (!selectedPlatform || !channelUrl.trim()) {
+      return { valid: false, error: '', ownershipError: '' };
+    }
+    const cfg = PLATFORM_CONFIG[selectedPlatform];
+    const url = channelUrl.trim().toLowerCase();
+    const matchedDomain = cfg.domains.find(d => url.includes(d));
+    if (!matchedDomain) {
+      return { valid: false, error: `Enter a valid ${selectedPlatform} URL (${cfg.urlPattern})`, ownershipError: '' };
+    }
+    const username = (() => {
+      const after = url.split(matchedDomain)[1] || '';
+      const cleaned = after.replace(/^[\/:]+/, '').replace(/^@/, '');
+      return cleaned.split(/[\/?#]/)[0];
+    })();
+    const account = state.connectedAccounts.find(a => a.platform === selectedPlatform && a.isConnected);
+    if (account && username && !account.username.toLowerCase().includes(username) && !username.includes(account.username.toLowerCase().replace('@', ''))) {
+      return { valid: true, error: '', ownershipError: `@${username} doesn't match your connected ${selectedPlatform} account (@${account.username}). Connect the owner account first.` };
+    }
+    return { valid: true, error: '', ownershipError: '' };
+  }, [selectedPlatform, channelUrl, state.connectedAccounts]);
+
+  const { valid: urlValid, error: urlError, ownershipError } = urlValidation();
+
   const selectedPkg = PACKAGES.find(p => p.id === selectedPackage);
   const customNum = parseInt(customAmount, 10) || 0;
   const totalFollowers = selectedPkg ? selectedPkg.followers : customNum;
   const totalCost = selectedPkg ? selectedPkg.cost : customNum * 5;
   const hasSufficient = state.balance >= totalCost;
-  const canOrder = totalFollowers > 0 && selectedPlatform && hasSufficient;
+  const canOrder = totalFollowers > 0 && selectedPlatform && hasSufficient && urlValid && !ownershipError;
   const afterBalance = state.balance - totalCost;
 
   const handlePlaceOrder = useCallback(() => {
@@ -71,6 +97,9 @@ export default function BuyFollowersScreen() {
 
     const now = new Date();
     const delivery = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+    const fbAccount = selectedPlatform === 'facebook'
+      ? state.connectedAccounts.find(a => a.platform === 'facebook' && a.isConnected)
+      : null;
     const order: FollowerOrder = {
       id: `V2E-${Math.floor(100000 + Math.random() * 900000)}`,
       platform: selectedPlatform,
@@ -80,15 +109,38 @@ export default function BuyFollowersScreen() {
       createdAt: now.toISOString(),
       estimatedDelivery: delivery.toISOString(),
       progress: 0,
+      pageId: fbAccount?.pageId,
+      pageUrl: fbAccount?.pageUrl,
     };
 
     dispatch({ type: 'PLACE_ORDER', order });
+
+    if (fbAccount && fbAccount.pageUrl) {
+      const task: FollowTask = {
+        id: `task-order-${Date.now()}`,
+        platform: 'facebook',
+        channelName: fbAccount.displayName,
+        category: 'Business',
+        reward: 5,
+        followers: fbAccount.followersCount.toLocaleString(),
+        pageUrl: fbAccount.pageUrl,
+      };
+      dispatch({ type: 'ADD_FOLLOW_TASKS', tasks: [task] });
+    }
+
     setOrderSuccess(true);
     setTimeout(() => {
       setOrderSuccess(false);
       router.push('/follower-orders');
     }, 1500);
-  }, [selectedPlatform, totalFollowers, totalCost, dispatch]);
+  }, [selectedPlatform, totalFollowers, totalCost, state.connectedAccounts, dispatch]);
+
+  const handlePlatformSelect = useCallback((platform: PlatformType) => {
+    setSelectedPlatform(platform);
+    setChannelUrl('');
+    setUrlTouched(false);
+    setPlatformDropdownOpen(false);
+  }, []);
 
   const handlePackageSelect = (id: string) => {
     setSelectedPackage(id);
@@ -193,10 +245,7 @@ export default function BuyFollowersScreen() {
                       return (
                         <Animated.View key={acc.platform} entering={FadeInDown.delay(i * 50).springify()}>
                           <Pressable
-                            onPress={() => {
-                              setSelectedPlatform(acc.platform);
-                              setPlatformDropdownOpen(false);
-                            }}
+                            onPress={() => handlePlatformSelect(acc.platform)}
                             style={({ pressed }) => [pressed && { opacity: 0.7 }]}
                           >
                             <View style={[styles.dropdownItem, isSelected && { backgroundColor: cfg.color + '15' }]}>
@@ -230,6 +279,61 @@ export default function BuyFollowersScreen() {
             )}
           </ThemedView>
         </Animated.View>
+
+        {selectedPlatform && (
+          <Animated.View entering={FadeInDown.delay(100).springify()}>
+            <ThemedView type="backgroundElement" style={styles.sectionCard}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="link-outline" size={16} color="#2ECC71" />
+                <ThemedText type="smallBold" style={styles.sectionTitle}>Channel URL</ThemedText>
+              </View>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.urlHint}>
+                Enter your {selectedPlatform} profile URL to verify ownership
+              </ThemedText>
+              <View style={[styles.urlInput, { borderColor: urlTouched && urlError ? '#EF4444' : urlTouched && urlValid && !ownershipError ? '#2ECC71' : theme.textSecondary + '20' }]}>
+                <View style={[styles.urlDomain, { backgroundColor: PLATFORM_CONFIG[selectedPlatform].color + '20' }]}>
+                  <Ionicons name={PLATFORM_CONFIG[selectedPlatform].icon} size={14} color={PLATFORM_CONFIG[selectedPlatform].color} />
+                  <ThemedText style={[styles.urlDomainText, { color: PLATFORM_CONFIG[selectedPlatform].color }]}>
+                    {PLATFORM_CONFIG[selectedPlatform].domains[0]}
+                  </ThemedText>
+                </View>
+                <TextInput
+                  style={[styles.urlField, { color: theme.text }]}
+                  placeholder="/your-profile"
+                  placeholderTextColor={theme.textSecondary + '60'}
+                  value={channelUrl}
+                  onChangeText={(text) => { setChannelUrl(text); if (!urlTouched) setUrlTouched(true); }}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
+                {channelUrl.trim().length > 0 && (
+                  <Pressable onPress={() => setChannelUrl('')} style={styles.urlClear}>
+                    <Ionicons name="close-circle" size={18} color={theme.textSecondary} />
+                  </Pressable>
+                )}
+              </View>
+              {urlTouched && urlError && (
+                <View style={styles.validationRow}>
+                  <Ionicons name="alert-circle" size={14} color="#EF4444" />
+                  <ThemedText style={styles.validationError}>{urlError}</ThemedText>
+                </View>
+              )}
+              {urlTouched && ownershipError && (
+                <View style={[styles.validationRow, styles.ownershipRow]}>
+                  <Ionicons name="warning" size={14} color="#F59E0B" />
+                  <ThemedText style={styles.ownershipText}>{ownershipError}</ThemedText>
+                </View>
+              )}
+              {urlTouched && urlValid && !ownershipError && channelUrl.trim().length > 0 && (
+                <View style={styles.validationRow}>
+                  <Ionicons name="checkmark-circle" size={14} color="#2ECC71" />
+                  <ThemedText style={styles.validationSuccess}>Ownership verified</ThemedText>
+                </View>
+              )}
+            </ThemedView>
+          </Animated.View>
+        )}
 
         <Animated.View entering={FadeInDown.delay(120).springify()}>
           <ThemedView type="backgroundElement" style={styles.sectionCard}>
@@ -363,7 +467,7 @@ export default function BuyFollowersScreen() {
                 <>
                   <Ionicons name="lock-closed" size={18} color="#fff" />
                   <ThemedText style={[styles.orderBtnText, { color: '#fff' }]}>
-                    {!selectedPlatform ? 'Select a platform' : !hasSufficient ? 'Insufficient Balance' : 'Enter amount'}
+                    {!selectedPlatform ? 'Select a platform' : !urlValid ? 'Enter valid channel URL' : ownershipError ? 'Ownership not verified' : !hasSufficient ? 'Insufficient Balance' : 'Enter amount'}
                   </ThemedText>
                 </>
               ) : (
@@ -497,4 +601,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
   },
   orderBtnText: { fontSize: 16, fontWeight: '800', color: '#000' },
+
+  // URL Section
+  urlHint: { fontSize: 12, lineHeight: 16 },
+  urlInput: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderRadius: 16,
+    paddingHorizontal: 4, paddingVertical: 4, gap: 6,
+  },
+  urlDomain: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12,
+  },
+  urlDomainText: { fontSize: 12, fontWeight: '700' },
+  urlField: { flex: 1, fontSize: 14, fontWeight: '600', paddingVertical: 8 },
+  urlClear: { padding: 8 },
+  validationRow: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 6,
+  },
+  validationError: { fontSize: 12, color: '#EF4444', flex: 1, lineHeight: 16 },
+  validationSuccess: { fontSize: 12, color: '#2ECC71', fontWeight: '600' },
+  ownershipRow: {
+    backgroundColor: '#F59E0B10', borderRadius: 12, padding: 10,
+  },
+  ownershipText: { fontSize: 12, color: '#F59E0B', flex: 1, lineHeight: 16 },
 });

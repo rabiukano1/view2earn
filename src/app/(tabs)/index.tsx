@@ -193,7 +193,7 @@ export default function DashboardScreen() {
                 <View style={styles.balanceDot} />
                 <ThemedText style={styles.balanceLabel}>Available Balance</ThemedText>
               </View>
-              <Pressable style={styles.withdrawBtn}>
+              <Pressable style={styles.withdrawBtn} onPress={() => router.push('/wallet')}>
                 <ThemedText style={styles.withdrawText}>Withdraw</ThemedText>
               </Pressable>
             </View>

@@ -11,6 +11,9 @@ export interface ConnectedAccount {
   isConnected: boolean;
   followersCount: number;
   avatarUrl?: string;
+  pageId?: string;
+  pageAccessToken?: string;
+  pageUrl?: string;
 }
 
 export interface FollowerOrder {
@@ -22,6 +25,8 @@ export interface FollowerOrder {
   createdAt: string;
   estimatedDelivery: string;
   progress: number;
+  pageId?: string;
+  pageUrl?: string;
 }
 
 export interface FollowTask {
@@ -31,6 +36,16 @@ export interface FollowTask {
   category: string;
   reward: number;
   followers: string;
+  pageUrl?: string;
+}
+
+export interface FacebookPage {
+  id: string;
+  name: string;
+  category: string;
+  followersCount: number;
+  accessToken: string;
+  url: string;
 }
 
 export interface MockUser {
@@ -53,10 +68,12 @@ interface MockDataState {
 
 type MockAction =
   | { type: 'CONNECT_ACCOUNT'; platform: PlatformType }
+  | { type: 'CONNECT_FACEBOOK_PAGE'; page: FacebookPage }
   | { type: 'DISCONNECT_ACCOUNT'; id: string }
   | { type: 'PLACE_ORDER'; order: FollowerOrder }
   | { type: 'CANCEL_ORDER'; id: string }
   | { type: 'COMPLETE_FOLLOW_TASK'; taskId: string }
+  | { type: 'ADD_FOLLOW_TASKS'; tasks: FollowTask[] }
   | { type: 'ADMIN_VERIFY_ORDER'; orderId: string; progress: number }
   | { type: 'ADMIN_RELEASE_ESCROW' }
   | { type: 'SET_BALANCE'; balance: number }
@@ -76,20 +93,26 @@ const PLATFORM_DISPLAY: Record<PlatformType, string[]> = {
   youtube: ['Demo User', 'John Doe', 'Jane Smith'],
 };
 
+export const MOCK_FACEBOOK_PAGES: FacebookPage[] = [
+  { id: 'fb-page-1', name: 'Demo Business Hub', category: 'Business', followersCount: 1250, accessToken: 'mock-token-1', url: 'https://www.facebook.com/profile.php?id=61577601656447' },
+  { id: 'fb-page-2', name: 'Tech Reviews Pro', category: 'Tech', followersCount: 3400, accessToken: 'mock-token-2', url: 'https://www.facebook.com/TechReviewsPro' },
+  { id: 'fb-page-3', name: 'Local Deals & Offers', category: 'Shopping', followersCount: 890, accessToken: 'mock-token-3', url: 'https://www.facebook.com/LocalDealsOffers' },
+];
+
 const FOLLOW_TASKS: FollowTask[] = [
-  { id: 'task-1', platform: 'tiktok', channelName: 'Fitness Beast', category: 'Fitness', reward: 25, followers: '12.5K' },
-  { id: 'task-2', platform: 'facebook', channelName: 'Daily Memes', category: 'Entertainment', reward: 15, followers: '45K' },
-  { id: 'task-3', platform: 'telegram', channelName: 'Crypto News', category: 'Crypto', reward: 20, followers: '8.2K' },
-  { id: 'task-4', platform: 'tiktok', channelName: 'Cooking Master', category: 'Food', reward: 25, followers: '6.8K' },
-  { id: 'task-5', platform: 'facebook', channelName: 'Tech Reviews', category: 'Tech', reward: 15, followers: '22K' },
-  { id: 'task-6', platform: 'telegram', channelName: 'AI Updates', category: 'Tech', reward: 20, followers: '3.1K' },
-  { id: 'task-7', platform: 'tiktok', channelName: 'Travel Vlogs', category: 'Travel', reward: 25, followers: '15K' },
-  { id: 'task-8', platform: 'facebook', channelName: 'Motivational Quotes', category: 'Lifestyle', reward: 15, followers: '67K' },
-  { id: 'task-9', platform: 'telegram', channelName: 'Gaming Community', category: 'Gaming', reward: 20, followers: '5.4K' },
-  { id: 'task-10', platform: 'tiktok', channelName: 'Pet Lovers', category: 'Animals', reward: 25, followers: '9.7K' },
-  { id: 'task-11', platform: 'facebook', channelName: 'Fashion Trends', category: 'Fashion', reward: 15, followers: '33K' },
-  { id: 'task-12', platform: 'tiktok', channelName: 'Music Discovery', category: 'Music', reward: 25, followers: '18K' },
-  { id: 'task-13', platform: 'youtube', channelName: 'Tech Unboxed', category: 'Tech', reward: 25, followers: '2.1M' },
+  { id: 'task-1', platform: 'tiktok', channelName: 'Fitness Beast', category: 'Fitness', reward: 25, followers: '12.5K', pageUrl: 'https://www.tiktok.com/@fitnessbeast' },
+  { id: 'task-2', platform: 'facebook', channelName: 'Daily Memes', category: 'Entertainment', reward: 15, followers: '45K', pageUrl: 'https://www.facebook.com/DailyMemes' },
+  { id: 'task-3', platform: 'telegram', channelName: 'Crypto News', category: 'Crypto', reward: 20, followers: '8.2K', pageUrl: 'https://t.me/cryptonews' },
+  { id: 'task-4', platform: 'tiktok', channelName: 'Cooking Master', category: 'Food', reward: 25, followers: '6.8K', pageUrl: 'https://www.tiktok.com/@cookingmaster' },
+  { id: 'task-5', platform: 'facebook', channelName: 'Tech Reviews', category: 'Tech', reward: 15, followers: '22K', pageUrl: 'https://www.facebook.com/TechReviews' },
+  { id: 'task-6', platform: 'telegram', channelName: 'AI Updates', category: 'Tech', reward: 20, followers: '3.1K', pageUrl: 'https://t.me/aiupdates' },
+  { id: 'task-7', platform: 'tiktok', channelName: 'Travel Vlogs', category: 'Travel', reward: 25, followers: '15K', pageUrl: 'https://www.tiktok.com/@travelvlogs' },
+  { id: 'task-8', platform: 'facebook', channelName: 'Motivational Quotes', category: 'Lifestyle', reward: 15, followers: '67K', pageUrl: 'https://www.facebook.com/MotivationalQuotes' },
+  { id: 'task-9', platform: 'telegram', channelName: 'Gaming Community', category: 'Gaming', reward: 20, followers: '5.4K', pageUrl: 'https://t.me/gamingcommunity' },
+  { id: 'task-10', platform: 'tiktok', channelName: 'Pet Lovers', category: 'Animals', reward: 25, followers: '9.7K', pageUrl: 'https://www.tiktok.com/@petlovers' },
+  { id: 'task-11', platform: 'facebook', channelName: 'Fashion Trends', category: 'Fashion', reward: 15, followers: '33K', pageUrl: 'https://www.facebook.com/FashionTrends' },
+  { id: 'task-12', platform: 'tiktok', channelName: 'Music Discovery', category: 'Music', reward: 25, followers: '18K', pageUrl: 'https://www.tiktok.com/@musicdiscovery' },
+  { id: 'task-13', platform: 'youtube', channelName: 'Tech Unboxed', category: 'Tech', reward: 25, followers: '2.1M', pageUrl: 'https://www.youtube.com/@TechUnboxed' },
 ];
 
 const initialAccounts: ConnectedAccount[] = [
@@ -117,6 +140,22 @@ function mockReducer(state: MockDataState, action: MockAction): MockDataState {
         displayName: PLATFORM_DISPLAY[action.platform][idx],
         isConnected: true,
         followersCount: Math.floor(Math.random() * 500) + 100,
+      };
+      return { ...state, connectedAccounts: [...state.connectedAccounts, newAccount] };
+    }
+    case 'CONNECT_FACEBOOK_PAGE': {
+      const used = state.connectedAccounts.find(a => a.platform === 'facebook');
+      if (used) return state;
+      const newAccount: ConnectedAccount = {
+        id: `acct-${Date.now()}`,
+        platform: 'facebook',
+        username: action.page.name.toLowerCase().replace(/\s+/g, '.'),
+        displayName: action.page.name,
+        isConnected: true,
+        followersCount: action.page.followersCount,
+        pageId: action.page.id,
+        pageAccessToken: action.page.accessToken,
+        pageUrl: action.page.url,
       };
       return { ...state, connectedAccounts: [...state.connectedAccounts, newAccount] };
     }
@@ -152,6 +191,11 @@ function mockReducer(state: MockDataState, action: MockAction): MockDataState {
         balance: state.balance + task.reward + (bonusSteps ? 50 : 0),
       };
     }
+    case 'ADD_FOLLOW_TASKS':
+      return {
+        ...state,
+        followTasks: [...action.tasks, ...state.followTasks],
+      };
     case 'ADMIN_VERIFY_ORDER':
       return {
         ...state,
