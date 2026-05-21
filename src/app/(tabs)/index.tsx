@@ -318,6 +318,7 @@ export default function DashboardScreen() {
             </Animated.View>
           </ThemedView>
         </Animated.View>
+
       </ScrollView>
       <RewardToast
         visible={showReward}

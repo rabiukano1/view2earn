@@ -418,6 +418,7 @@ export default function BuyFollowersScreen() {
             </View>
           </ThemedView>
         </Animated.View>
+
       </ScrollView>
 
       <LinearGradient

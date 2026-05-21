@@ -33,6 +33,11 @@ const TIKTOK_METHODS: { key: VerifyMethod; icon: keyof typeof Ionicons.glyphMap;
   { key: 'qrcode', icon: 'qr-code-outline', label: 'QR Code', desc: 'Scan your profile QR' },
 ];
 
+const YOUTUBE_METHODS: { key: VerifyMethod; icon: keyof typeof Ionicons.glyphMap; label: string; desc: string }[] = [
+  { key: 'username', icon: 'at-outline', label: 'Username', desc: 'Enter your @username' },
+  { key: 'link', icon: 'link-outline', label: 'Channel Link', desc: 'Paste your channel link' },
+];
+
 export default function SocialConnectScreen() {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
@@ -95,25 +100,43 @@ export default function SocialConnectScreen() {
         setVerifyError('Enter a valid Facebook link (facebook.com/...)');
         return;
       }
-    } else if (platform === 'tiktok') {
-      if (!trimmed) {
-        setVerifyError('Enter your TikTok info');
-        return;
-      }
-      if (verifyMethod === 'username') {
-        const clean = trimmed.replace(/^@/, '');
-        if (clean.length < 2) {
-          setVerifyError('Enter a valid username (min 2 characters)');
+      } else if (platform === 'tiktok') {
+        if (!trimmed) {
+          setVerifyError('Enter your TikTok info');
           return;
         }
-      } else if (verifyMethod === 'link') {
-        const valid = trimmed.includes('tiktok.com') || trimmed.includes('vm.tiktok');
-        if (!valid) {
-          setVerifyError('Enter a valid TikTok link (tiktok.com/...)');
+        if (verifyMethod === 'username') {
+          const clean = trimmed.replace(/^@/, '');
+          if (clean.length < 2) {
+            setVerifyError('Enter a valid username (min 2 characters)');
+            return;
+          }
+        } else if (verifyMethod === 'link') {
+          const valid = trimmed.includes('tiktok.com') || trimmed.includes('vm.tiktok');
+          if (!valid) {
+            setVerifyError('Enter a valid TikTok link (tiktok.com/...)');
+            return;
+          }
+        }
+      } else if (platform === 'youtube') {
+        if (!trimmed) {
+          setVerifyError('Enter your YouTube info');
           return;
         }
+        if (verifyMethod === 'username') {
+          const clean = trimmed.replace(/^@/, '');
+          if (clean.length < 2) {
+            setVerifyError('Enter a valid username (min 2 characters)');
+            return;
+          }
+        } else if (verifyMethod === 'link') {
+          const valid = trimmed.includes('youtube.com') || trimmed.includes('youtu.be');
+          if (!valid) {
+            setVerifyError('Enter a valid YouTube link (youtube.com/@...)');
+            return;
+          }
+        }
       }
-    }
 
     setVerifyError('');
     dispatch({ type: 'CONNECT_ACCOUNT', platform });
@@ -418,6 +441,116 @@ export default function SocialConnectScreen() {
                         Example: facebook.com/profile.php?id=61577601656447
                       </ThemedText>
                     </>
+                  )}
+                </>
+              ) : verifyPlatform === 'youtube' ? (
+                <>
+                  <View style={styles.verifyHeader}>
+                    <View style={styles.verifyPlatformRow}>
+                      <View style={[styles.verifyPlatformIcon, { backgroundColor: '#FF0000' }]}>
+                        <Ionicons name="logo-youtube" size={20} color="#fff" />
+                      </View>
+                      <View>
+                        <ThemedText style={styles.verifyTitle}>Verify YouTube Channel</ThemedText>
+                        <ThemedText style={styles.verifySubtitle}>
+                          Choose a method to verify ownership
+                        </ThemedText>
+                      </View>
+                    </View>
+                    <Pressable onPress={closeVerification} style={styles.verifyClose}>
+                      <Ionicons name="close" size={22} color="#fff" />
+                    </Pressable>
+                  </View>
+
+                  <View style={styles.methodsRow}>
+                    {YOUTUBE_METHODS.map((method) => {
+                      const active = verifyMethod === method.key;
+                      return (
+                        <Pressable
+                          key={method.key}
+                          onPress={() => { setVerifyMethod(method.key); setVerifyError(''); }}
+                          style={({ pressed }) => [
+                            styles.methodChip,
+                            active && styles.methodChipActive,
+                            pressed && { opacity: 0.8 },
+                          ]}
+                        >
+                          <Ionicons
+                            name={method.icon}
+                            size={16}
+                            color={active ? '#2ECC71' : '#8B949E'}
+                          />
+                          <ThemedText style={[
+                            styles.methodLabel,
+                            active && { color: '#2ECC71', fontWeight: '700' },
+                          ]}>
+                            {method.label}
+                          </ThemedText>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  {verifyMethod === 'username' && (
+                    <View style={styles.verifyBody}>
+                      <ThemedText style={styles.verifyHint}>
+                        Enter your YouTube @username to verify
+                      </ThemedText>
+                      <View style={[styles.verifyInput, { borderColor: verifyError ? '#EF4444' : 'rgba(255,255,255,0.1)' }]}>
+                        <View style={styles.verifyPrefix}>
+                          <ThemedText style={styles.verifyPrefixText}>@</ThemedText>
+                        </View>
+                        <TextInput
+                          style={[styles.verifyField, { color: theme.text }]}
+                          placeholder="username"
+                          placeholderTextColor={theme.textSecondary + '60'}
+                          value={verifyInput.replace(/^@/, '')}
+                          onChangeText={(t) => { setVerifyInput('@' + t.replace(/^@/, '')); setVerifyError(''); }}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                        />
+                      </View>
+                      {verifyError ? (
+                        <View style={styles.verifyErrorRow}>
+                          <Ionicons name="alert-circle" size={14} color="#EF4444" />
+                          <ThemedText style={styles.verifyErrorText}>{verifyError}</ThemedText>
+                        </View>
+                      ) : null}
+                    </View>
+                  )}
+
+                  {verifyMethod === 'link' && (
+                    <View style={styles.verifyBody}>
+                      <ThemedText style={styles.verifyHint}>
+                        Paste your YouTube channel link
+                      </ThemedText>
+                      <View style={[styles.verifyInput, { borderColor: verifyError ? '#EF4444' : 'rgba(255,255,255,0.1)' }]}>
+                        <View style={[styles.urlDomain, { backgroundColor: '#FF000020' }]}>
+                          <Ionicons name="logo-youtube" size={14} color="#FF0000" />
+                          <ThemedText style={{ fontSize: 12, fontWeight: '700', color: '#FF0000' }}>youtube.com</ThemedText>
+                        </View>
+                        <TextInput
+                          style={[styles.verifyField, { color: theme.text }]}
+                          placeholder="/@username"
+                          placeholderTextColor={theme.textSecondary + '60'}
+                          value={verifyInput}
+                          onChangeText={(t) => { setVerifyInput(t); setVerifyError(''); }}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          keyboardType="url"
+                        />
+                      </View>
+                      {verifyError ? (
+                        <View style={styles.verifyErrorRow}>
+                          <Ionicons name="alert-circle" size={14} color="#EF4444" />
+                          <ThemedText style={styles.verifyErrorText}>{verifyError}</ThemedText>
+                        </View>
+                      ) : (
+                        <ThemedText style={styles.verifyLinkHint}>
+                          Format: youtube.com/@username
+                        </ThemedText>
+                      )}
+                    </View>
                   )}
                 </>
               ) : (
