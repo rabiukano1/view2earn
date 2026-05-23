@@ -36,7 +36,13 @@
           }
         }
       ],
-
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos to upload a profile picture."
+        }
+      ],
+      "expo-image"
     ],
     "experiments": {
       "typedRoutes": true,

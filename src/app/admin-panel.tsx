@@ -1185,7 +1185,7 @@ function SettingsTab({ state, dispatch }: { state: any; dispatch: any }) {
   const initForm = () => {
     const plat: Record<string, any> = {};
     PLATFORMS.forEach(p => {
-      plat[p] = { ...s.platforms[p] };
+      plat[p] = { ...(s.platforms as any)?.[p] };
     });
     setForm({
       platforms: plat,
@@ -1206,7 +1206,7 @@ function SettingsTab({ state, dispatch }: { state: any; dispatch: any }) {
   const setPlatVal = (plat: PlatformType, key: string, v: string) => {
     setForm({
       ...form,
-      platforms: { ...form.platforms, [plat]: { ...form.platforms[plat], [key]: parseInt(v, 10) || 0 } },
+      platforms: { ...(form as any)?.platforms, [plat]: { ...(form as any)?.platforms?.[plat], [key]: parseInt(v, 10) || 0 } },
     });
   };
 
@@ -1229,7 +1229,7 @@ function SettingsTab({ state, dispatch }: { state: any; dispatch: any }) {
             <AdminText style={{ fontSize: 12, color: C.text }}>{f.label}</AdminText>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <TextInput style={styles.settingInput}
-                value={String(form?.platforms?.[plat]?.[f.key] ?? 0)}
+                value={String((form?.platforms as any)?.[plat]?.[f.key] ?? 0)}
                 onChangeText={(v) => setPlatVal(plat, f.key, v)}
                 keyboardType="number-pad" />
               <AdminMuted>{f.suffix}</AdminMuted>
@@ -1248,7 +1248,7 @@ function SettingsTab({ state, dispatch }: { state: any; dispatch: any }) {
         {PLAT_SETTING_FIELDS.map((f, i) => (
           <View key={f.key} style={[styles.settingRow, i < PLAT_SETTING_FIELDS.length - 1 && { borderBottomWidth: 1, borderBottomColor: C.surfaceBorder }]}>
             <AdminText style={{ flex: 1, fontSize: 13, color: C.text }}>{f.label}</AdminText>
-            <AdminText bold style={{ color }}>{(s.platforms[plat] as any)?.[f.key]} {f.suffix}</AdminText>
+            <AdminText bold style={{ color }}>{(s.platforms as any)?.[plat]?.[f.key] ?? '-'} {f.suffix}</AdminText>
           </View>
         ))}
       </AdminCard>

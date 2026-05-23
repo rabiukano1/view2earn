@@ -1,14 +1,24 @@
 import { Image } from 'expo-image';
-import { useState } from 'react';
-import { Dimensions, StyleSheet, View } from 'react-native';
-import Animated, { Easing, Keyframe } from 'react-native-reanimated';
-import { scheduleOnRN } from 'react-native-worklets';
+import { useEffect, useState } from 'react';
+import { Dimensions, Platform, StyleSheet, View } from 'react-native';
+import Animated, { Easing, Keyframe, runOnJS } from 'react-native-reanimated';
 
 const INITIAL_SCALE_FACTOR = Dimensions.get('screen').height / 90;
 const DURATION = 600;
 
 export function AnimatedSplashOverlay() {
   const [visible, setVisible] = useState(true);
+  const [started, setStarted] = useState(false);
+
+  useEffect(() => {
+    setStarted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!started) return;
+    const timer = setTimeout(() => setVisible(false), DURATION + 100);
+    return () => clearTimeout(timer);
+  }, [started]);
 
   if (!visible) return null;
 
@@ -36,7 +46,7 @@ export function AnimatedSplashOverlay() {
       entering={splashKeyframe.duration(DURATION).withCallback((finished) => {
         'worklet';
         if (finished) {
-          scheduleOnRN(setVisible, false);
+          runOnJS(setVisible)(false);
         }
       })}
       style={styles.backgroundSolidColor}

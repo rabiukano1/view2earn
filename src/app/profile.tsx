@@ -1,15 +1,29 @@
 import { useCallback, useRef, useState } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 
 import { SmartHeader } from '@/components/smart-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
 import { useMockData, PlatformType } from '@/context/MockDataContext';
+
+const PRESET_AVATARS = [
+  { icon: 'person', color: '#2ECC71', bg: '#2ECC7120', label: 'Green' },
+  { icon: 'person', color: '#3B82F6', bg: '#3B82F620', label: 'Blue' },
+  { icon: 'person', color: '#8B5CF6', bg: '#8B5CF620', label: 'Purple' },
+  { icon: 'person', color: '#F59E0B', bg: '#F59E0B20', label: 'Gold' },
+  { icon: 'person', color: '#FF0000', bg: '#FF000020', label: 'Red' },
+  { icon: 'person', color: '#EC4899', bg: '#EC489920', label: 'Pink' },
+  { icon: 'person', color: '#06B6D4', bg: '#06B6D420', label: 'Cyan' },
+  { icon: 'person', color: '#FFFFFF', bg: 'rgba(255,255,255,0.06)', label: 'White' },
+];
+
+const AVATAR_SIZE = 80;
 
 interface MenuItem {
   icon: keyof typeof Ionicons.glyphMap;
@@ -28,9 +42,10 @@ const MENU_ITEMS: MenuItem[] = [
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
-  const { state } = useMockData();
+  const { state, dispatch } = useMockData();
   const [adminTapCount, setAdminTapCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -53,6 +68,34 @@ export default function ProfileScreen() {
       Alert.alert('Profile', `Tap ${7 - newCount} more time${7 - newCount === 1 ? '' : 's'} to unlock admin panel`);
     }
   }, [adminTapCount]);
+
+  const handlePickPhoto = useCallback((avatarUrl: string) => {
+    dispatch({ type: 'SET_AVATAR', avatarUrl });
+    setShowAvatarPicker(false);
+  }, [dispatch]);
+
+  const handleUploadPhoto = useCallback(async () => {
+    try {
+      const ImagePicker = await import('expo-image-picker');
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permission needed', 'Allow photo library access to upload a picture.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]) {
+        dispatch({ type: 'SET_AVATAR', avatarUrl: result.assets[0].uri });
+        setShowAvatarPicker(false);
+      }
+    } catch {
+      Alert.alert('Unavailable', 'Photo upload is not available on this device. Try selecting a preset avatar instead.');
+    }
+  }, [dispatch]);
 
   const handleCopy = useCallback((label: string, value: string) => {
     Alert.alert('Copied', `${label}: ${value}`);
@@ -88,11 +131,22 @@ export default function ProfileScreen() {
           <ThemedView type="backgroundElement" style={styles.profileCard}>
             <Pressable onPress={handleAvatarPress} style={styles.avatarWrap}>
               <View style={styles.avatar}>
-                <Ionicons name="person" size={40} color={theme.textSecondary} />
+                {state.user.avatarUrl?.startsWith('preset-') ? (
+                  <LinearGradient
+                    colors={[state.user.avatarUrl.replace('preset-', '') + '40', state.user.avatarUrl.replace('preset-', '') + '15']}
+                    style={styles.avatarGradient}
+                  >
+                    <Ionicons name="person" size={36} color={state.user.avatarUrl.replace('preset-', '')} />
+                  </LinearGradient>
+                ) : state.user.avatarUrl ? (
+                  <Image source={{ uri: state.user.avatarUrl }} style={styles.avatarImage} />
+                ) : (
+                  <Ionicons name="person" size={40} color={theme.textSecondary} />
+                )}
               </View>
-              <View style={styles.cameraBadge}>
+              <Pressable onPress={() => setShowAvatarPicker(true)} style={styles.cameraBadge}>
                 <Ionicons name="camera" size={12} color="#FFFFFF" />
-              </View>
+              </Pressable>
             </Pressable>
             <ThemedText type="smallBold" style={styles.profileName}>{state.user.fullName}</ThemedText>
             <Pressable onPress={() => handleCopy('UID', state.user.id)} style={styles.copyChip}>
@@ -215,6 +269,57 @@ export default function ProfileScreen() {
           </ThemedView>
         </Animated.View>
       </ScrollView>
+
+      <Modal visible={showAvatarPicker} transparent animationType="fade" onRequestClose={() => setShowAvatarPicker(false)}>
+        <View style={styles.modalOverlay}>
+          <Animated.View entering={FadeInUp.duration(300).springify()} style={styles.modalWrap}>
+            <View style={styles.modalHeader}>
+              <View style={[styles.modalIconWrap, { backgroundColor: '#2ECC7120' }]}>
+                <Ionicons name="image-outline" size={24} color="#2ECC71" />
+              </View>
+              <ThemedText type="smallBold" style={{ fontSize: 18 }}>Choose Avatar</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">Select a profile picture style</ThemedText>
+            </View>
+            <View style={styles.avatarGrid}>
+              {PRESET_AVATARS.map((av) => {
+                const isActive = state.user.avatarUrl === `preset-${av.color}`;
+                return (
+                  <Pressable
+                    key={av.color}
+                    onPress={() => handlePickPhoto(`preset-${av.color}`)}
+                    style={({ pressed }) => [
+                      styles.avatarOption,
+                      { backgroundColor: av.bg },
+                      isActive && styles.avatarOptionActive,
+                      pressed && { opacity: 0.8 },
+                    ]}
+                  >
+                    <LinearGradient
+                      colors={[av.color + '30', av.color + '10']}
+                      style={styles.avatarOptionGradient}
+                    >
+                      <Ionicons name="person" size={28} color={av.color} />
+                    </LinearGradient>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Pressable
+              onPress={handleUploadPhoto}
+              style={({ pressed }) => [styles.uploadBtn, pressed && { opacity: 0.7 }]}
+            >
+              <Ionicons name="cloud-upload-outline" size={18} color="#3B82F6" />
+              <ThemedText type="smallBold" style={styles.uploadBtnText}>Upload Photo</ThemedText>
+            </Pressable>
+            <Pressable
+              onPress={() => setShowAvatarPicker(false)}
+              style={({ pressed }) => [styles.modalCancel, pressed && { opacity: 0.7 }]}
+            >
+              <ThemedText type="smallBold" themeColor="textSecondary">Cancel</ThemedText>
+            </Pressable>
+          </Animated.View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -253,6 +358,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarGradient: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
   },
   cameraBadge: {
     position: 'absolute',
@@ -360,5 +478,70 @@ const styles = StyleSheet.create({
   versionRow: {
     alignItems: 'center',
     paddingVertical: 8,
+  },
+
+  // Avatar Picker Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalWrap: {
+    backgroundColor: '#1C1C1E',
+    borderRadius: 24,
+    padding: 24,
+    gap: 20,
+  },
+  modalHeader: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  modalIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  avatarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'center',
+  },
+  avatarOption: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  avatarOptionActive: {
+    borderColor: '#2ECC71',
+  },
+  avatarOptionGradient: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: '#3B82F615',
+  },
+  uploadBtnText: {
+    fontSize: 15,
+    color: '#3B82F6',
+  },
+  modalCancel: {
+    alignItems: 'center',
+    paddingVertical: 12,
   },
 });

@@ -56,6 +56,7 @@ export interface MockUser {
   fullName: string;
   balance: number;
   isAdmin: boolean;
+  avatarUrl?: string;
   status?: UserStatus;
   createdAt?: string;
   totalEarned?: number;
@@ -147,7 +148,8 @@ type MockAction =
   | { type: 'ADMIN_UPDATE_SETTINGS'; settings: Partial<PlatformSettings> & { platforms?: Partial<Record<PlatformType, Partial<PerPlatformSettings>>> } }
   | { type: 'ADMIN_CREATE_ANNOUNCEMENT'; announcement: Announcement }
   | { type: 'ADMIN_UPDATE_ANNOUNCEMENT'; announcement: Announcement }
-  | { type: 'ADMIN_REMOVE_ANNOUNCEMENT'; id: string };
+  | { type: 'ADMIN_REMOVE_ANNOUNCEMENT'; id: string }
+  | { type: 'SET_AVATAR'; avatarUrl: string };
 
 const PLATFORM_USERNAMES: Record<PlatformType, string[]> = {
   facebook: ['demo.user', 'john.doe', 'jane.smith'],
@@ -368,6 +370,14 @@ function mockReducer(state: MockDataState, action: MockAction): MockDataState {
       return {
         ...state,
         announcements: state.announcements.filter(a => a.id !== action.id),
+      };
+    case 'SET_AVATAR':
+      return {
+        ...state,
+        user: { ...state.user, avatarUrl: action.avatarUrl },
+        mockUsers: state.mockUsers.map(u =>
+          u.id === state.user.id ? { ...u, avatarUrl: action.avatarUrl } : u
+        ),
       };
     default:
       return state;
