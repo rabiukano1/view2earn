@@ -1,4 +1,4 @@
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Image, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInUp } from 'react-native-reanimated';
@@ -26,9 +26,13 @@ export function AnnouncementModal({ visible, announcement, onClose, onCta }: Pro
         <Animated.View entering={FadeInUp.duration(300).springify()} style={styles.wrap}>
           <View style={[styles.banner, { backgroundColor: color + '15' }]}>
             <LinearGradient colors={[color + '20', 'transparent']} style={StyleSheet.absoluteFill} />
-            <View style={[styles.bannerIcon, { backgroundColor: color }]}>
-              <Ionicons name="megaphone" size={28} color="#fff" />
-            </View>
+            {announcement.imageUrl ? (
+              <Image source={{ uri: announcement.imageUrl }} style={styles.bannerImage} />
+            ) : (
+              <View style={[styles.bannerIcon, { backgroundColor: color }]}>
+                <Ionicons name="megaphone" size={28} color="#fff" />
+              </View>
+            )}
             <ThemedText style={[styles.bannerTitle, { color }]}>{announcement.title}</ThemedText>
             {announcement.subtitle && (
               <ThemedText style={styles.bannerSub}>{announcement.subtitle}</ThemedText>
@@ -81,6 +85,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     overflow: 'hidden',
+  },
+  bannerImage: {
+    width: '100%',
+    height: 160,
+    borderRadius: 16,
+    marginBottom: 12,
   },
   bannerIcon: {
     width: 60,

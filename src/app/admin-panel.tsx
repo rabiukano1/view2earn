@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, Modal } from 'react-native';
+import { Alert, Dimensions, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -8,6 +8,7 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SmartHeader } from '@/components/smart-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { AnnouncementModal } from '@/components/announcement-modal';
 import { useMockData, PlatformType, UserStatus, FollowTask, Announcement } from '@/context/MockDataContext';
 
 // ─── Light theme constants for admin panel ─────────────────────
@@ -1336,6 +1337,7 @@ function SettingsTab({ state, dispatch }: { state: any; dispatch: any }) {
 
 // ─── Announcements Tab ──────────────────────────────────────────
 function AnnouncementsTab({ state, dispatch }: { state: any; dispatch: any }) {
+  const insets = useSafeAreaInsets();
   const [showCreate, setShowCreate] = useState(false);
   const [editAnn, setEditAnn] = useState<Announcement | null>(null);
   const [annTitle, setAnnTitle] = useState('');
@@ -1344,13 +1346,55 @@ function AnnouncementsTab({ state, dispatch }: { state: any; dispatch: any }) {
   const [annCta, setAnnCta] = useState('');
   const [annLink, setAnnLink] = useState('');
   const [annColor, setAnnColor] = useState('#2ECC71');
+  const [annImageUrl, setAnnImageUrl] = useState<string | undefined>(undefined);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewAnn, setPreviewAnn] = useState<Announcement | null>(null);
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+
+  const LIMITS = { title: 80, subtitle: 120, content: 500 } as const;
+
+  const livePreview = useMemo((): Announcement => ({
+    id: 'live',
+    title: annTitle || 'Your Title',
+    subtitle: annSub || undefined,
+    imageUrl: annImageUrl,
+    content: annContent || 'Your announcement content...',
+    cta: annCta || undefined,
+    link: annLink || undefined,
+    color: annColor,
+    active: true,
+    createdAt: new Date().toISOString(),
+  }), [annTitle, annSub, annImageUrl, annContent, annCta, annLink, annColor]);
 
   const anns = state.announcements;
 
   const resetForm = () => {
     setAnnTitle(''); setAnnSub(''); setAnnContent('');
     setAnnCta(''); setAnnLink(''); setAnnColor('#2ECC71');
+    setAnnImageUrl(undefined);
   };
+
+  const pickImage = useCallback(async () => {
+    try {
+      const ImagePicker = await import('expo-image-picker');
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permission needed', 'Allow photo library access to upload a picture.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]) {
+        setAnnImageUrl(result.assets[0].uri);
+      }
+    } catch {
+      Alert.alert('Unavailable', 'Photo upload is not available on this device.');
+    }
+  }, []);
 
   const openEdit = (a: Announcement) => {
     setEditAnn(a);
@@ -1360,6 +1404,7 @@ function AnnouncementsTab({ state, dispatch }: { state: any; dispatch: any }) {
     setAnnCta(a.cta || '');
     setAnnLink(a.link || '');
     setAnnColor(a.color || '#2ECC71');
+    setAnnImageUrl(a.imageUrl || undefined);
     setShowCreate(true);
   };
 
@@ -1372,6 +1417,7 @@ function AnnouncementsTab({ state, dispatch }: { state: any; dispatch: any }) {
       id: editAnn?.id || `ann-${Date.now()}`,
       title: annTitle.trim(),
       subtitle: annSub.trim() || undefined,
+      imageUrl: annImageUrl,
       content: annContent.trim(),
       cta: annCta.trim() || undefined,
       link: annLink.trim() || undefined,
@@ -1386,6 +1432,26 @@ function AnnouncementsTab({ state, dispatch }: { state: any; dispatch: any }) {
     resetForm();
   };
 
+  const handlePreview = useCallback(() => {
+    if (!annTitle.trim() || !annContent.trim()) {
+      Alert.alert('Incomplete', 'Title and content are needed for preview.');
+      return;
+    }
+    setPreviewAnn({
+      id: 'preview',
+      title: annTitle.trim(),
+      subtitle: annSub.trim() || undefined,
+      imageUrl: annImageUrl,
+      content: annContent.trim(),
+      cta: annCta.trim() || undefined,
+      link: annLink.trim() || undefined,
+      color: annColor,
+      active: true,
+      createdAt: new Date().toISOString(),
+    });
+    setShowPreview(true);
+  }, [annTitle, annSub, annImageUrl, annContent, annCta, annLink, annColor]);
+
   const handleDelete = (id: string) => {
     Alert.alert('Delete', 'Remove this announcement?', [
       { text: 'Cancel', style: 'cancel' },
@@ -1398,6 +1464,7 @@ function AnnouncementsTab({ state, dispatch }: { state: any; dispatch: any }) {
   };
 
   const colorOptions = ['#2ECC71', '#3B82F6', '#8B5CF6', '#F59E0B', '#FF0000', '#EF4444', '#EC4899', '#06B6D4'];
+  const screenHeight = Dimensions.get('window').height;
 
   return (
     <>
@@ -1458,8 +1525,8 @@ function AnnouncementsTab({ state, dispatch }: { state: any; dispatch: any }) {
 
       <Modal visible={showCreate} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <Animated.View entering={FadeInUp.duration(300).springify()}>
-            <View style={styles.modalContent}>
+          <Animated.View entering={FadeInUp.duration(300).springify()} style={{ maxHeight: screenHeight - Math.max(40, insets.top + 20) - insets.bottom - 20, marginHorizontal: 24, marginTop: Math.max(40, insets.top + 20) }}>
+            <View style={[styles.modalContent, { maxHeight: '100%' }]}>
               <LinearGradient colors={[C.purple + '15', '#fff']} style={styles.modalHeader}>
                 <View style={[styles.modalHeaderIcon, { backgroundColor: C.purple }]}>
                   <Ionicons name="megaphone" size={24} color="#fff" />
@@ -1467,36 +1534,184 @@ function AnnouncementsTab({ state, dispatch }: { state: any; dispatch: any }) {
                 <AdminText bold style={{ fontSize: 18 }}>{editAnn ? 'Edit Announcement' : 'New Announcement'}</AdminText>
                 <AdminMuted>Create engaging announcements for users</AdminMuted>
               </LinearGradient>
-              <View style={styles.modalBody}>
-                <AdminMuted style={{ fontSize: 12, marginBottom: 4 }}>Title *</AdminMuted>
-                <TextInput style={styles.modalInput} placeholder="Big announcement title" placeholderTextColor={C.textMuted} value={annTitle} onChangeText={setAnnTitle} />
-                <AdminMuted style={{ fontSize: 12, marginBottom: 4 }}>Subtitle</AdminMuted>
-                <TextInput style={styles.modalInput} placeholder="Short tagline" placeholderTextColor={C.textMuted} value={annSub} onChangeText={setAnnSub} />
-                <AdminMuted style={{ fontSize: 12, marginBottom: 4 }}>Content *</AdminMuted>
-                <TextInput style={[styles.modalInput, { height: 80, textAlignVertical: 'top' }]} placeholder="Full announcement details..." placeholderTextColor={C.textMuted} multiline value={annContent} onChangeText={setAnnContent} />
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <View style={{ flex: 1 }}>
-                    <AdminMuted style={{ fontSize: 12, marginBottom: 4 }}>CTA Text</AdminMuted>
-                    <TextInput style={styles.modalInput} placeholder="Learn More" placeholderTextColor={C.textMuted} value={annCta} onChangeText={setAnnCta} />
+              <ScrollView style={[styles.modalBody, { flexShrink: 1 }]} contentContainerStyle={{ paddingBottom: 16, gap: 16 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                {/* ─── Live Preview Card ─── */}
+                {(annTitle || annSub || annImageUrl || annContent) && (
+                  <Animated.View entering={FadeInUp.duration(250)} style={[styles.livePreviewCard, { borderColor: annColor + '40' }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <View style={[styles.livePreviewDot, { backgroundColor: annColor }]} />
+                      <AdminText style={{ fontSize: 11, fontWeight: '700', color: annColor, textTransform: 'uppercase', letterSpacing: 0.5 }}>Live Preview</AdminText>
+                    </View>
+                    {annImageUrl && (
+                      <Image source={{ uri: annImageUrl }} style={styles.livePreviewImage} />
+                    )}
+                    <AdminText bold style={{ fontSize: 15, color: C.text }}>{annTitle || 'Untitled'}</AdminText>
+                    {annSub ? <AdminMuted style={{ fontSize: 12 }}>{annSub}</AdminMuted> : null}
+                    <AdminMuted style={{ fontSize: 12 }}>{annContent || 'No content yet'}</AdminMuted>
+                  </Animated.View>
+                )}
+
+                {/* ─── Content Section ─── */}
+                <View>
+                  <View style={styles.sectionLabel}>
+                    <Ionicons name="document-text-outline" size={14} color={C.purple} />
+                    <AdminText style={{ fontSize: 12, fontWeight: '700', color: C.purple, textTransform: 'uppercase', letterSpacing: 0.5 }}>Content</AdminText>
                   </View>
-                  <View style={{ flex: 1 }}>
+                  <View style={styles.fieldGroup}>
+                    <View style={styles.fieldRow}>
+                      <AdminMuted style={{ fontSize: 12 }}>Title *</AdminMuted>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={[styles.charBarOuter, { width: 40 }]}>
+                          <View style={[styles.charBarInner, {
+                            width: `${Math.min((annTitle.length / LIMITS.title) * 100, 100)}%`,
+                            backgroundColor: annTitle.length > LIMITS.title * 0.8 ? (annTitle.length >= LIMITS.title ? C.red : C.orange) : C.accent,
+                          }]} />
+                        </View>
+                        <AdminMuted style={{ fontSize: 10 }}>{annTitle.length}/{LIMITS.title}</AdminMuted>
+                      </View>
+                    </View>
+                    <TextInput
+                      style={[styles.modalInput, focusedField === 'title' && styles.modalInputFocused]}
+                      placeholder="Big announcement title"
+                      placeholderTextColor={C.textMuted}
+                      value={annTitle} onChangeText={setAnnTitle}
+                      maxLength={LIMITS.title}
+                      onFocus={() => setFocusedField('title')}
+                      onBlur={() => setFocusedField(null)}
+                    />
+                  </View>
+                  <View style={styles.fieldGroup}>
+                    <View style={styles.fieldRow}>
+                      <AdminMuted style={{ fontSize: 12 }}>Subtitle</AdminMuted>
+                      <AdminMuted style={{ fontSize: 10 }}>{annSub.length}/{LIMITS.subtitle}</AdminMuted>
+                    </View>
+                    <TextInput
+                      style={[styles.modalInput, focusedField === 'sub' && styles.modalInputFocused]}
+                      placeholder="Short tagline"
+                      placeholderTextColor={C.textMuted}
+                      value={annSub} onChangeText={setAnnSub}
+                      maxLength={LIMITS.subtitle}
+                      onFocus={() => setFocusedField('sub')}
+                      onBlur={() => setFocusedField(null)}
+                    />
+                  </View>
+                  <View style={styles.fieldGroup}>
+                    <View style={styles.fieldRow}>
+                      <AdminMuted style={{ fontSize: 12 }}>Content *</AdminMuted>
+                      <AdminMuted style={{ fontSize: 10, color: annContent.length > LIMITS.content * 0.9 ? C.orange : C.textMuted }}>{annContent.length}/{LIMITS.content}</AdminMuted>
+                    </View>
+                    <TextInput
+                      style={[styles.modalInput, styles.modalInputMultiline, focusedField === 'content' && styles.modalInputFocused]}
+                      placeholder="Full announcement details..."
+                      placeholderTextColor={C.textMuted}
+                      multiline value={annContent} onChangeText={setAnnContent}
+                      maxLength={LIMITS.content}
+                      onFocus={() => setFocusedField('content')}
+                      onBlur={() => setFocusedField(null)}
+                    />
+                  </View>
+                </View>
+
+                {/* ─── Appearance Section ─── */}
+                <View>
+                  <View style={styles.sectionLabel}>
+                    <Ionicons name="color-palette-outline" size={14} color={C.purple} />
+                    <AdminText style={{ fontSize: 12, fontWeight: '700', color: C.purple, textTransform: 'uppercase', letterSpacing: 0.5 }}>Appearance</AdminText>
+                  </View>
+                  <View style={styles.fieldGroup}>
+                    <AdminMuted style={{ fontSize: 12, marginBottom: 8 }}>Accent Color</AdminMuted>
+                    <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
+                      {colorOptions.map(c => (
+                        <Pressable key={c} onPress={() => setAnnColor(c)}
+                          style={[styles.colorOption, {
+                            backgroundColor: c,
+                            borderWidth: annColor === c ? 3 : 0,
+                            borderColor: annColor === c ? '#fff' : undefined,
+                            transform: annColor === c ? [{ scale: 1.15 }] : [],
+                          }]}>
+                          {annColor === c && (
+                            <Ionicons name="checkmark" size={16} color="#fff" />
+                          )}
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                  <View style={styles.fieldGroup}>
+                    <AdminMuted style={{ fontSize: 12, marginBottom: 8 }}>Banner Image</AdminMuted>
+                    <Pressable
+                      onPress={pickImage}
+                      style={({ pressed }) => [{
+                        borderRadius: 16,
+                        overflow: 'hidden',
+                        borderWidth: 2,
+                        borderColor: annImageUrl ? annColor : C.surfaceBorder,
+                        borderStyle: annImageUrl ? 'solid' : 'dashed',
+                        opacity: pressed ? 0.85 : 1,
+                      }]}>
+                      {annImageUrl ? (
+                        <View>
+                          <Image source={{ uri: annImageUrl }} style={{ width: '100%', height: 140 }} resizeMode="cover" />
+                          <LinearGradient colors={['transparent', 'rgba(0,0,0,0.6)']} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 60 }} />
+                          <View style={{ position: 'absolute', bottom: 10, left: 12, right: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                              <Ionicons name="image" size={14} color="#fff" />
+                              <Text style={{ fontSize: 11, color: '#fff', fontWeight: '600' }}>Tap to change</Text>
+                            </View>
+                            <Pressable onPress={() => setAnnImageUrl(undefined)}
+                              style={({ pressed }) => ({ padding: 4, opacity: pressed ? 0.7 : 1 })}>
+                              <Ionicons name="close-circle" size={22} color="#fff" />
+                            </Pressable>
+                          </View>
+                        </View>
+                      ) : (
+                        <View style={{ height: 80, alignItems: 'center', justifyContent: 'center', backgroundColor: C.inputBg, gap: 6 }}>
+                          <Ionicons name="cloud-upload-outline" size={24} color={C.blue} />
+                          <AdminText style={{ fontSize: 13, color: C.blue, fontWeight: '600' }}>Tap to upload image</AdminText>
+                          <AdminMuted style={{ fontSize: 11 }}>16:9 recommended</AdminMuted>
+                        </View>
+                      )}
+                    </Pressable>
+                  </View>
+                </View>
+
+                {/* ─── Link Section ─── */}
+                <View>
+                  <View style={styles.sectionLabel}>
+                    <Ionicons name="link-outline" size={14} color={C.purple} />
+                    <AdminText style={{ fontSize: 12, fontWeight: '700', color: C.purple, textTransform: 'uppercase', letterSpacing: 0.5 }}>Call to Action</AdminText>
+                  </View>
+                  <View style={styles.fieldGroup}>
+                    <AdminMuted style={{ fontSize: 12, marginBottom: 4 }}>Button Text</AdminMuted>
+                    <TextInput
+                      style={[styles.modalInput, focusedField === 'cta' && styles.modalInputFocused]}
+                      placeholder="Learn More"
+                      placeholderTextColor={C.textMuted}
+                      value={annCta} onChangeText={setAnnCta}
+                      onFocus={() => setFocusedField('cta')}
+                      onBlur={() => setFocusedField(null)}
+                    />
+                  </View>
+                  <View style={styles.fieldGroup}>
                     <AdminMuted style={{ fontSize: 12, marginBottom: 4 }}>Link (optional)</AdminMuted>
-                    <TextInput style={styles.modalInput} placeholder="/route" placeholderTextColor={C.textMuted} value={annLink} onChangeText={setAnnLink} />
+                    <TextInput
+                      style={[styles.modalInput, focusedField === 'link' && styles.modalInputFocused]}
+                      placeholder="https:// or /route"
+                      placeholderTextColor={C.textMuted}
+                      value={annLink} onChangeText={setAnnLink}
+                      onFocus={() => setFocusedField('link')}
+                      onBlur={() => setFocusedField(null)}
+                    />
                   </View>
                 </View>
-                <AdminMuted style={{ fontSize: 12, marginBottom: 4 }}>Accent Color</AdminMuted>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  {colorOptions.map(c => (
-                    <Pressable key={c} onPress={() => setAnnColor(c)}
-                      style={[styles.colorOption, {
-                        backgroundColor: c,
-                        borderWidth: annColor === c ? 3 : 0,
-                        borderColor: annColor === c ? '#fff' : undefined,
-                      }]} />
-                  ))}
-                </View>
-              </View>
+              </ScrollView>
+
+              {/* ─── Actions ─── */}
               <View style={styles.modalActions}>
+                <Pressable onPress={handlePreview}
+                  style={({ pressed }) => [styles.modalBtn, styles.modalBtnOutline, pressed && { opacity: 0.8 }]}>
+                  <Ionicons name="eye-outline" size={16} color={C.blue} />
+                  <AdminText style={{ fontWeight: '600', color: C.blue, marginLeft: 4 }}>Preview</AdminText>
+                </Pressable>
                 <Pressable onPress={() => { setShowCreate(false); setEditAnn(null); }}
                   style={({ pressed }) => [styles.modalBtn, styles.modalBtnOutline, pressed && { opacity: 0.8 }]}>
                   <AdminText style={{ fontWeight: '600', color: C.textSecondary }}>Cancel</AdminText>
@@ -1508,6 +1723,12 @@ function AnnouncementsTab({ state, dispatch }: { state: any; dispatch: any }) {
                   </LinearGradient>
                 </Pressable>
               </View>
+
+              <AnnouncementModal
+                visible={showPreview}
+                announcement={previewAnn}
+                onClose={() => setShowPreview(false)}
+              />
             </View>
           </Animated.View>
         </View>
@@ -1975,7 +2196,7 @@ const styles = StyleSheet.create({
   auditIconBox: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
 
   // Modals
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 24 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-start' },
   modalContent: { backgroundColor: C.surface, borderRadius: 28, overflow: 'hidden' },
   modalHeader: { padding: 24, gap: 8, alignItems: 'center' },
   modalHeaderIcon: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
@@ -1999,5 +2220,55 @@ const styles = StyleSheet.create({
   },
   colorOption: {
     width: 36, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
+  },
+
+  // Modern Announcements Form
+  livePreviewCard: {
+    backgroundColor: C.surface,
+    borderRadius: 16,
+    padding: 16,
+    gap: 8,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  livePreviewDot: {
+    width: 8, height: 8, borderRadius: 4,
+  },
+  livePreviewImage: {
+    width: '100%', height: 100, borderRadius: 12,
+  },
+  sectionLabel: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginBottom: 10,
+  },
+  fieldGroup: {
+    marginBottom: 14,
+  },
+  fieldRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  charBarOuter: {
+    height: 4, borderRadius: 2, backgroundColor: C.surfaceBorder, overflow: 'hidden',
+  },
+  charBarInner: {
+    height: '100%', borderRadius: 2,
+  },
+  modalInputFocused: {
+    borderColor: C.purple,
+    backgroundColor: C.surface,
+    shadowColor: C.purple,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  modalInputMultiline: {
+    height: 90, textAlignVertical: 'top', paddingTop: 12,
   },
 });

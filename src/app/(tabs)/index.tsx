@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -268,6 +268,9 @@ export default function DashboardScreen() {
                     ]}
                   >
                     <LinearGradient colors={[color + '18', 'transparent']} style={StyleSheet.absoluteFill} />
+                    {ann.imageUrl && (
+                      <Image source={{ uri: ann.imageUrl }} style={styles.slideImage} />
+                    )}
                     <View style={styles.slideTop}>
                       <View style={[styles.slideIcon, { backgroundColor: color + '20' }]}>
                         <Ionicons name="megaphone" size={16} color={color} />
@@ -535,6 +538,12 @@ const styles = StyleSheet.create({
     gap: 8,
     borderWidth: 1,
     overflow: 'hidden',
+  },
+  slideImage: {
+    width: '100%',
+    height: 120,
+    borderRadius: 12,
+    marginBottom: 4,
   },
   slideTop: {
     flexDirection: 'row',
