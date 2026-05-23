@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { RewardedAdOverlay } from '@/components/rewarded-ad-overlay';
 
-export function useAdReward(onEarnedReward: () => void) {
+export function useAdReward(onEarnedReward: () => void, reward?: number) {
   const [adVisible, setAdVisible] = useState(false);
 
   const showAd = useCallback(() => {
@@ -22,6 +22,7 @@ export function useAdReward(onEarnedReward: () => void) {
       visible={adVisible}
       onComplete={handleComplete}
       onDismiss={handleDismiss}
+      reward={reward}
     />
   );
 

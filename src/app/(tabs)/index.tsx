@@ -17,9 +17,10 @@ import Animated, {
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { RewardToast } from '@/components/reward-toast';
+import { AnnouncementModal } from '@/components/announcement-modal';
 import { useTheme } from '@/hooks/use-theme';
 import { useAdReward } from '@/hooks/use-ad-reward';
-import { useMockData } from '@/context/MockDataContext';
+import { useMockData, Announcement } from '@/context/MockDataContext';
 
 interface QuickAction {
   icon: keyof typeof Ionicons.glyphMap;
@@ -53,6 +54,24 @@ export default function DashboardScreen() {
   const [adsLeft, setAdsLeft] = useState(3);
   const [showReward, setShowReward] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [slideIndex, setSlideIndex] = useState(0);
+  const [selectedAnn, setSelectedAnn] = useState<Announcement | null>(null);
+  const slideScrollRef = useRef<ScrollView>(null);
+  const slideTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const activeAnnouncements = state.announcements.filter(a => a.active);
+
+  useEffect(() => {
+    if (activeAnnouncements.length < 2) return;
+    slideTimer.current = setInterval(() => {
+      setSlideIndex(prev => {
+        const next = (prev + 1) % activeAnnouncements.length;
+        slideScrollRef.current?.scrollTo({ x: next * (320 + 12), animated: true });
+        return next;
+      });
+    }, 4500);
+    return () => { if (slideTimer.current) clearInterval(slideTimer.current); };
+  }, [activeAnnouncements.length]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -90,13 +109,15 @@ export default function DashboardScreen() {
     opacity: glowOpacity.value,
   }));
 
+  const rewardAmount = state.settings?.watchReward ?? 25;
+
   const earnReward = useCallback(() => {
     setAdsLeft(prev => prev - 1);
-    dispatch({ type: 'SET_BALANCE', balance: state.balance + 25 });
+    dispatch({ type: 'SET_BALANCE', balance: state.balance + rewardAmount });
     setShowReward(true);
-  }, [dispatch, state.balance]);
+  }, [dispatch, state.balance, rewardAmount]);
 
-  const { showAd, adOverlay } = useAdReward(earnReward);
+  const { showAd, adOverlay } = useAdReward(earnReward, rewardAmount);
 
   const handleWatchAd = useCallback(() => {
     if (adsLeft <= 0) return;
@@ -181,7 +202,7 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2ECC71" colors={["#2ECC71"]} />}
       >
 
-        <Animated.View entering={FadeInUp.delay(100).springify().damping(15)}>
+        <Animated.View entering={FadeInUp.delay(80).springify().damping(15)}>
           <LinearGradient
             colors={['#1a3a2a', '#0f1f18']}
             style={styles.balanceCard}
@@ -219,6 +240,63 @@ export default function DashboardScreen() {
             </View>
           </LinearGradient>
         </Animated.View>
+
+        {activeAnnouncements.length > 0 && (
+          <Animated.View entering={FadeInUp.delay(120).springify().damping(15)}>
+            <ScrollView
+              ref={slideScrollRef}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.slideRow}
+              onMomentumScrollEnd={(e) => {
+                const idx = Math.round(e.nativeEvent.contentOffset.x / (320 + 12));
+                setSlideIndex(idx);
+              }}
+              snapToInterval={320 + 12}
+              decelerationRate="fast"
+            >
+              {activeAnnouncements.map((ann, i) => {
+                const color = ann.color || '#2ECC71';
+                return (
+                  <Pressable
+                    key={ann.id}
+                    onPress={() => setSelectedAnn(ann)}
+                    style={({ pressed }) => [
+                      styles.slideCard,
+                      { backgroundColor: color + '12', borderColor: color + '25' },
+                      pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+                    ]}
+                  >
+                    <LinearGradient colors={[color + '18', 'transparent']} style={StyleSheet.absoluteFill} />
+                    <View style={styles.slideTop}>
+                      <View style={[styles.slideIcon, { backgroundColor: color + '20' }]}>
+                        <Ionicons name="megaphone" size={16} color={color} />
+                      </View>
+                      <ThemedText style={[styles.slideTag, { color }]}>Announcement</ThemedText>
+                    </View>
+                    <ThemedText style={styles.slideTitle} numberOfLines={2}>{ann.title}</ThemedText>
+                    {ann.subtitle && (
+                      <ThemedText style={styles.slideSub} numberOfLines={1}>{ann.subtitle}</ThemedText>
+                    )}
+                    {ann.cta && (
+                      <View style={[styles.slideCta, { backgroundColor: color + '20' }]}>
+                        <ThemedText style={[styles.slideCtaText, { color }]}>{ann.cta}</ThemedText>
+                        <Ionicons name="arrow-forward" size={12} color={color} />
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            {activeAnnouncements.length > 1 && (
+              <View style={styles.dotsRow}>
+                {activeAnnouncements.map((_, i) => (
+                  <View key={i} style={[styles.dot, i === slideIndex && { backgroundColor: '#2ECC71', width: 20 }]} />
+                ))}
+              </View>
+            )}
+          </Animated.View>
+        )}
 
         {renderActionGrid(CORE_ACTIONS)}
 
@@ -275,7 +353,7 @@ export default function DashboardScreen() {
                   <ThemedText type="smallBold" style={styles.adTitle}>Daily Ad Boost</ThemedText>
                 </View>
                 <ThemedText type="small" themeColor="textSecondary">
-                  +25 PTS per ad • {adsLeft} left today
+                  +{rewardAmount} PTS per ad • {adsLeft} left today
                 </ThemedText>
               </View>
               <View style={styles.adCountWrap}>
@@ -322,8 +400,17 @@ export default function DashboardScreen() {
       </ScrollView>
       <RewardToast
         visible={showReward}
-        points={25}
+        points={rewardAmount}
         onDismiss={() => setShowReward(false)}
+      />
+      <AnnouncementModal
+        visible={!!selectedAnn}
+        announcement={selectedAnn}
+        onClose={() => setSelectedAnn(null)}
+        onCta={(link) => {
+          setSelectedAnn(null);
+          if (link) router.push(link as any);
+        }}
       />
       {adOverlay}
     </View>
@@ -435,6 +522,73 @@ const styles = StyleSheet.create({
   },
   streakLabel: { fontSize: 10 },
   streakLabelActive: { color: '#2ECC71', fontWeight: '700' },
+
+  // Slideshow Carousel
+  slideRow: {
+    gap: 12,
+    paddingRight: 16,
+  },
+  slideCard: {
+    width: 320,
+    borderRadius: 20,
+    padding: 18,
+    gap: 8,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  slideTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  slideIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  slideTag: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  slideTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  slideSub: {
+    fontSize: 13,
+    color: '#8B949E',
+  },
+  slideCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  slideCtaText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  dotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 8,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
 
   // Ad Card
   adCard: { borderRadius: 20, padding: 18, gap: 16, overflow: 'hidden' },

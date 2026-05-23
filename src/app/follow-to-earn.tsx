@@ -9,7 +9,9 @@ import { ClaimToast } from '@/components/claim-toast';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
-import { useMockData, PlatformType } from '@/context/MockDataContext';
+import { useMockData, PlatformType, PerPlatformSettings } from '@/context/MockDataContext';
+
+const PLATFORMS: PlatformType[] = ['facebook', 'tiktok', 'telegram', 'youtube'];
 
 const PLATFORM_ICONS: Record<PlatformType, keyof typeof Ionicons.glyphMap> = {
   facebook: 'logo-facebook',
@@ -65,7 +67,19 @@ export default function FollowToEarnScreen() {
 
   const currentClaim = claimTask ? state.followTasks.find(t => t.id === claimTask) : null;
 
-  const progressPercent = (state.completedFollowTasks.length / 10) * 100;
+  const platProgress = useMemo(() => {
+    return PLATFORMS.map(p => {
+      const completed = state.completedFollowTasksPerPlatform?.[p]?.length ?? 0;
+      const platSet: PerPlatformSettings = state.settings.platforms[p];
+      const bonusAt = platSet?.bonusAtTasks ?? 10;
+      const bonusAmt = platSet?.bonusAmount ?? 50;
+      const earnedBonus = completed >= bonusAt && bonusAt > 0;
+      return { platform: p, completed, bonusAt, bonusAmt, earnedBonus };
+    });
+  }, [state.completedFollowTasksPerPlatform, state.settings.platforms]);
+
+  const totalCompleted = state.completedFollowTasks.length;
+  const nextBonus = platProgress.find(p => !p.earnedBonus && p.bonusAt > 0);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -91,20 +105,35 @@ export default function FollowToEarnScreen() {
             <View>
               <ThemedText type="smallBold">Daily Progress</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
-                {state.completedFollowTasks.length}/10 tasks completed
+                {totalCompleted} tasks completed
               </ThemedText>
             </View>
-            <View style={styles.bonusBadge}>
-              <Ionicons name="gift-outline" size={14} color="#F59E0B" />
-              <ThemedText style={styles.bonusText}>+50 PTS bonus</ThemedText>
-            </View>
+            {nextBonus && (
+              <View style={styles.bonusBadge}>
+                <Ionicons name="gift-outline" size={14} color="#F59E0B" />
+                <ThemedText style={styles.bonusText}>+{nextBonus.bonusAmt} PTS bonus</ThemedText>
+              </View>
+            )}
           </View>
-          <View style={[styles.progressBar, { backgroundColor: theme.textSecondary + '20' }]}>
-            <View style={[styles.progressFill, { width: `${Math.min(progressPercent, 100)}%` }]} />
+          <View style={styles.platProgressRow}>
+            {platProgress.map(p => {
+              const color = PLATFORM_COLORS[p.platform];
+              const pct = p.bonusAt > 0 ? Math.min((p.completed / p.bonusAt) * 100, 100) : 0;
+              return (
+                <View key={p.platform} style={styles.platProgressChip}>
+                  <Ionicons name={PLATFORM_ICONS[p.platform]} size={12} color={color} />
+                  <ThemedText style={[styles.platProgressText, { color: p.earnedBonus ? '#2ECC71' : theme.textSecondary }]}>
+                    {p.completed}/{p.bonusAt}
+                  </ThemedText>
+                </View>
+              );
+            })}
           </View>
-          <ThemedText type="small" themeColor="textSecondary">
-            Complete 10 tasks to earn a 50 PTS bonus!
-          </ThemedText>
+          {nextBonus && (
+            <ThemedText type="small" themeColor="textSecondary">
+              Complete {nextBonus.bonusAt - nextBonus.completed} more {nextBonus.platform} tasks for +{nextBonus.bonusAmt} PTS bonus!
+            </ThemedText>
+          )}
         </ThemedView>
 
         <ThemedView type="backgroundElement" style={styles.earningsBanner}>
@@ -262,6 +291,24 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 16,
     gap: 10,
+  },
+  platProgressRow: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  platProgressChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  platProgressText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   progressHeader: {
     flexDirection: 'row',

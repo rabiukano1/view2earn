@@ -23,9 +23,10 @@ interface Props {
   visible: boolean;
   onComplete: () => void;
   onDismiss: () => void;
+  reward?: number;
 }
 
-export function RewardedAdOverlay({ visible, onComplete, onDismiss }: Props) {
+export function RewardedAdOverlay({ visible, onComplete, onDismiss, reward }: Props) {
   const [countdown, setCountdown] = useState(10);
   const [canSkip, setCanSkip] = useState(false);
   const brand = useRef(BRANDS[Math.floor(Math.random() * BRANDS.length)]).current;
@@ -119,7 +120,7 @@ export function RewardedAdOverlay({ visible, onComplete, onDismiss }: Props) {
           </ThemedText>
           <View style={styles.rewardBadge}>
             <Ionicons name="diamond" size={16} color="#2ECC71" />
-            <ThemedText style={styles.rewardText}>+25 PTS on completion</ThemedText>
+            <ThemedText style={styles.rewardText}>+{reward ?? 25} PTS on completion</ThemedText>
           </View>
         </View>
       </Animated.View>

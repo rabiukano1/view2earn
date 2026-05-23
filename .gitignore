@@ -41,3 +41,6 @@ example
 # generated native folders
 /ios
 /android
+
+# local-only work notes (only visible after commit)
+WORK_NOTE.md
