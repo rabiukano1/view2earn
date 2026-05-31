@@ -38,10 +38,21 @@ export function ClaimToast({ visible, channelName, platform, reward, pageUrl, on
 
   const handleOpenInApp = () => {
     if (!pageUrl) return;
-    const fbDeepLink = `fb://facewebmodal/f?href=${encodeURIComponent(pageUrl)}`;
-    Linking.openURL(fbDeepLink).catch(() => {
+
+    if (platform === 'facebook') {
+      const fbDeepLink = `fb://facewebmodal/f?href=${encodeURIComponent(pageUrl)}`;
+      Linking.openURL(fbDeepLink).catch(() => Linking.openURL(pageUrl));
+    } else if (platform === 'telegram') {
+      const match = pageUrl.match(/t\.me\/(.+)/);
+      if (match) {
+        const tgDeepLink = `tg://resolve?domain=${match[1]}`;
+        Linking.openURL(tgDeepLink).catch(() => Linking.openURL(pageUrl));
+      } else {
+        Linking.openURL(pageUrl);
+      }
+    } else {
       Linking.openURL(pageUrl);
-    });
+    }
   };
 
   const platformLabel = platform.charAt(0).toUpperCase() + platform.slice(1);

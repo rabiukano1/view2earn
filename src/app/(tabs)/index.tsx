@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   FadeInDown,
   FadeInUp,
+  FadeOutDown,
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
@@ -53,6 +54,7 @@ export default function DashboardScreen() {
   const { state, dispatch } = useMockData();
   const [adsLeft, setAdsLeft] = useState(3);
   const [showReward, setShowReward] = useState(false);
+  const [showNoAdsToast, setShowNoAdsToast] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [slideIndex, setSlideIndex] = useState(0);
   const [selectedAnn, setSelectedAnn] = useState<Announcement | null>(null);
@@ -119,10 +121,28 @@ export default function DashboardScreen() {
 
   const { showAd, adOverlay } = useAdReward(earnReward, rewardAmount);
 
+  useEffect(() => {
+    if (!showNoAdsToast) return;
+    const t = setTimeout(() => setShowNoAdsToast(false), 3000);
+    return () => clearTimeout(t);
+  }, [showNoAdsToast]);
+
+  const hasAdIds = useMemo(() => {
+    const c = state.adConfig;
+    return !!(c?.admob?.interstitialId || c?.admob?.bannerId || c?.admob?.rewardedId ||
+      c?.unityAds?.gameId ||
+      c?.audienceNetwork?.appId || c?.audienceNetwork?.interstitialPlacementId ||
+      c?.audienceNetwork?.bannerPlacementId || c?.audienceNetwork?.rewardedPlacementId);
+  }, [state.adConfig]);
+
   const handleWatchAd = useCallback(() => {
     if (adsLeft <= 0) return;
+    if (!hasAdIds) {
+      setShowNoAdsToast(true);
+      return;
+    }
     showAd();
-  }, [adsLeft, showAd]);
+  }, [adsLeft, showAd, hasAdIds]);
 
   const renderActionGrid = (actions: QuickAction[], title?: string) => (
     <View style={styles.section}>
@@ -406,6 +426,25 @@ export default function DashboardScreen() {
         points={rewardAmount}
         onDismiss={() => setShowReward(false)}
       />
+      {showNoAdsToast && (
+        <Animated.View
+          entering={FadeInUp.duration(300).springify()}
+          exiting={FadeOutDown.duration(200)}
+          style={styles.noAdsToast}
+        >
+          <LinearGradient colors={['#2a1a1a', '#1a0f0f']} style={styles.noAdsGradient}>
+            <View style={styles.noAdsContent}>
+              <View style={styles.noAdsIconWrap}>
+                <Ionicons name="alert-circle" size={20} color="#EF4444" />
+              </View>
+              <View style={styles.noAdsTextWrap}>
+                <ThemedText style={styles.noAdsTitle}>Ads Unavailable</ThemedText>
+                <ThemedText style={styles.noAdsSub}>No ad IDs configured. Contact the admin.</ThemedText>
+              </View>
+            </View>
+          </LinearGradient>
+        </Animated.View>
+      )}
       <AnnouncementModal
         visible={!!selectedAnn}
         announcement={selectedAnn}
@@ -626,4 +665,52 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   watchText: { fontSize: 16, fontWeight: '800', color: '#000' },
+
+  // No Ads Toast
+  noAdsToast: {
+    position: 'absolute',
+    bottom: 100,
+    left: 16,
+    right: 16,
+    zIndex: 999,
+    borderRadius: 20,
+    overflow: 'hidden',
+    elevation: 10,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+  },
+  noAdsGradient: {
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  noAdsContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  noAdsIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: '#EF444420',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noAdsTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  noAdsTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#EF4444',
+  },
+  noAdsSub: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.6)',
+    fontWeight: '500',
+  },
 });

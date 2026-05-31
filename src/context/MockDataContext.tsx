@@ -95,6 +95,29 @@ export interface Announcement {
   color?: string;
 }
 
+export interface AdMobConfig {
+  interstitialId: string;
+  bannerId: string;
+  rewardedId: string;
+}
+
+export interface UnityAdsConfig {
+  gameId: string;
+}
+
+export interface AudienceNetworkConfig {
+  appId: string;
+  interstitialPlacementId: string;
+  bannerPlacementId: string;
+  rewardedPlacementId: string;
+}
+
+export interface AdConfig {
+  admob: AdMobConfig;
+  unityAds: UnityAdsConfig;
+  audienceNetwork: AudienceNetworkConfig;
+}
+
 export interface PerPlatformSettings {
   rewardPerFollow: number;
   dailyFollowLimit: number;
@@ -124,6 +147,7 @@ interface MockDataState {
   auditLog: AuditEntry[];
   settings: PlatformSettings;
   announcements: Announcement[];
+  adConfig: AdConfig;
 }
 
 type MockAction =
@@ -149,6 +173,7 @@ type MockAction =
   | { type: 'ADMIN_CREATE_ANNOUNCEMENT'; announcement: Announcement }
   | { type: 'ADMIN_UPDATE_ANNOUNCEMENT'; announcement: Announcement }
   | { type: 'ADMIN_REMOVE_ANNOUNCEMENT'; id: string }
+  | { type: 'ADMIN_UPDATE_AD_CONFIG'; adConfig: Partial<AdConfig> }
   | { type: 'SET_AVATAR'; avatarUrl: string };
 
 const PLATFORM_USERNAMES: Record<PlatformType, string[]> = {
@@ -371,6 +396,11 @@ function mockReducer(state: MockDataState, action: MockAction): MockDataState {
         ...state,
         announcements: state.announcements.filter(a => a.id !== action.id),
       };
+    case 'ADMIN_UPDATE_AD_CONFIG':
+      return {
+        ...state,
+        adConfig: { ...state.adConfig, ...action.adConfig },
+      };
     case 'SET_AVATAR':
       return {
         ...state,
@@ -475,6 +505,23 @@ const DEFAULT_SETTINGS: PlatformSettings = {
   watchReward: 15,
 };
 
+const DEFAULT_AD_CONFIG: AdConfig = {
+  admob: {
+    interstitialId: '',
+    bannerId: '',
+    rewardedId: '',
+  },
+  unityAds: {
+    gameId: '',
+  },
+  audienceNetwork: {
+    appId: '',
+    interstitialPlacementId: '',
+    bannerPlacementId: '',
+    rewardedPlacementId: '',
+  },
+};
+
 const today = new Date().toISOString().split('T')[0];
 
 const INITIAL_COMPLETED_PER_PLATFORM: Record<PlatformType, string[]> = {
@@ -504,6 +551,7 @@ const initialState: MockDataState = {
   auditLog: MOCK_AUDIT,
   settings: DEFAULT_SETTINGS,
   announcements: SEED_ANNOUNCEMENTS,
+  adConfig: DEFAULT_AD_CONFIG,
 };
 
 export function MockDataProvider({ children }: { children: ReactNode }) {

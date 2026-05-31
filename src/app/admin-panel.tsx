@@ -9,7 +9,7 @@ import { SmartHeader } from '@/components/smart-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { AnnouncementModal } from '@/components/announcement-modal';
-import { useMockData, PlatformType, UserStatus, FollowTask, Announcement } from '@/context/MockDataContext';
+import { useMockData, PlatformType, UserStatus, FollowTask, Announcement, AdConfig } from '@/context/MockDataContext';
 
 // ─── Light theme constants for admin panel ─────────────────────
 const C = {
@@ -29,7 +29,7 @@ const C = {
   inputBg: '#F0F1F5',
 };
 
-type AdminTab = 'dashboard' | 'orders' | 'tasks' | 'users' | 'payouts' | 'settings' | 'audit' | 'announcements';
+type AdminTab = 'dashboard' | 'orders' | 'tasks' | 'users' | 'payouts' | 'settings' | 'audit' | 'announcements' | 'ads';
 
 interface TabDef {
   key: AdminTab;
@@ -43,7 +43,8 @@ const TABS: TabDef[] = [
   { key: 'tasks', icon: 'list-outline', label: 'Tasks' },
   { key: 'users', icon: 'people-outline', label: 'Users' },
   { key: 'payouts', icon: 'wallet-outline', label: 'Payouts' },
-  { key: 'announcements', icon: 'megaphone-outline', label: 'Ads' },
+  { key: 'announcements', icon: 'megaphone-outline', label: 'Announcements' },
+  { key: 'ads', icon: 'tv-outline', label: 'Ads' },
   { key: 'settings', icon: 'settings-outline', label: 'Settings' },
   { key: 'audit', icon: 'document-text-outline', label: 'Audit' },
 ];
@@ -770,9 +771,29 @@ function TasksTab({ state, dispatch }: { state: any; dispatch: any }) {
     setShowCreate(true);
   };
 
+  const isValidPlatformUrl = (url: string, platform: PlatformType): boolean => {
+    const patterns: Record<PlatformType, RegExp> = {
+      tiktok: /^https?:\/\/(www\.)?tiktok\.com\/@.+/i,
+      facebook: /^https?:\/\/(www\.)?(facebook|fb)\.com\/.+/i,
+      telegram: /^https?:\/\/(t\.me|telegram\.me)\/.+/i,
+      youtube: /^https?:\/\/(www\.)?(youtube\.com\/@|youtube\.com\/channel\/|youtu\.be\/).+/i,
+    };
+    return patterns[platform].test(url);
+  };
+
   const handleSave = () => {
-    if (!taskName.trim() || !taskReward) {
-      Alert.alert('Error', 'Channel name and reward are required');
+    if (!taskName.trim() || !taskReward || !taskUrl.trim()) {
+      Alert.alert('Error', 'Channel name, reward, and page URL are required');
+      return;
+    }
+    if (!isValidPlatformUrl(taskUrl.trim(), taskPlatform)) {
+      const hints: Record<PlatformType, string> = {
+        tiktok: 'https://www.tiktok.com/@username',
+        facebook: 'https://www.facebook.com/page',
+        telegram: 'https://t.me/username',
+        youtube: 'https://www.youtube.com/@channel',
+      };
+      Alert.alert('Invalid URL', `Page URL must be a valid ${taskPlatform} URL.\n\nExpected format:\n${hints[taskPlatform]}`);
       return;
     }
     const task: FollowTask = {
@@ -782,7 +803,7 @@ function TasksTab({ state, dispatch }: { state: any; dispatch: any }) {
       category: taskCategory.trim() || 'General',
       reward: parseInt(taskReward, 10) || defaultReward,
       followers: taskFollowers || '1K',
-      pageUrl: taskUrl || undefined,
+      pageUrl: taskUrl.trim(),
     };
     if (editTask) dispatch({ type: 'ADMIN_UPDATE_TASK', task });
     else dispatch({ type: 'ADD_FOLLOW_TASKS', tasks: [task] });
@@ -881,7 +902,7 @@ function TasksTab({ state, dispatch }: { state: any; dispatch: any }) {
                   </View>
                   <View style={{ flex: 1 }}>
                     <AdminMuted style={{ fontSize: 12, marginBottom: 4 }}>Page URL</AdminMuted>
-                    <TextInput style={styles.modalInput} placeholder="Optional" placeholderTextColor={C.textMuted} value={taskUrl} onChangeText={setTaskUrl} />
+                    <TextInput style={styles.modalInput} placeholder="e.g. https://tiktok.com/@channel" placeholderTextColor={C.textMuted} value={taskUrl} onChangeText={setTaskUrl} />
                   </View>
                 </View>
               </View>
@@ -1330,6 +1351,146 @@ function SettingsTab({ state, dispatch }: { state: any; dispatch: any }) {
             </Pressable>
           </View>
         </>
+      )}
+    </>
+  );
+}
+
+// ─── Ads Control Tab ─────────────────────────────────────────────
+function AdsControlTab({ state, dispatch }: { state: any; dispatch: any }) {
+  const adConfig = state.adConfig as AdConfig;
+  const [editMode, setEditMode] = useState(false);
+  const [form, setForm] = useState<AdConfig | null>(null);
+
+  const initForm = () => setForm({
+    admob: { ...adConfig.admob },
+    unityAds: { ...adConfig.unityAds },
+    audienceNetwork: { ...adConfig.audienceNetwork },
+  });
+
+  const setField = (section: keyof AdConfig, field: string, value: string) => {
+    if (!form) return;
+    setForm({
+      ...form,
+      [section]: { ...(form[section] as any), [field]: value },
+    });
+  };
+
+  const handleSave = () => {
+    if (!form) return;
+    dispatch({ type: 'ADMIN_UPDATE_AD_CONFIG', adConfig: form });
+    setEditMode(false);
+    Alert.alert('Saved', 'Ad configuration updated across the platform');
+  };
+
+  const renderSection = (title: string, icon: keyof typeof Ionicons.glyphMap, color: string, section: keyof AdConfig, fields: { key: string; label: string; placeholder: string }[]) => {
+    if (!editMode) {
+      const config = adConfig[section] as Record<string, string>;
+      const hasAny = Object.values(config).some(v => v);
+      return (
+        <AdminCard key={title}>
+          <View style={styles.sectionHeader}>
+            <View style={[styles.cardIconBox, { backgroundColor: color + '12' }]}>
+              <Ionicons name={icon} size={16} color={color} />
+            </View>
+            <AdminText bold style={{ fontSize: 15 }}>{title}</AdminText>
+          </View>
+          {fields.map((f, i) => (
+            <View key={f.key} style={[styles.settingRow, i < fields.length - 1 && { borderBottomWidth: 1, borderBottomColor: C.surfaceBorder }]}>
+              <AdminText style={{ flex: 1, fontSize: 13, color: C.text }}>{f.label}</AdminText>
+              <AdminText bold style={{ color: config[f.key] ? color : C.textMuted, fontSize: 12, maxWidth: 180, textAlign: 'right' }} numberOfLines={1}>
+                {config[f.key] || 'Not set'}
+              </AdminText>
+            </View>
+          ))}
+          {!hasAny && (
+            <AdminMuted style={{ fontSize: 11, fontStyle: 'italic', marginTop: 4 }}>
+              No IDs configured — set them in edit mode
+            </AdminMuted>
+          )}
+        </AdminCard>
+      );
+    }
+    return (
+      <AdminCard key={title}>
+        <View style={styles.sectionHeader}>
+          <View style={[styles.cardIconBox, { backgroundColor: color + '12' }]}>
+            <Ionicons name={icon} size={16} color={color} />
+          </View>
+          <AdminText bold style={{ fontSize: 15 }}>{title}</AdminText>
+        </View>
+        {fields.map(f => (
+          <View key={f.key} style={{ gap: 4, paddingVertical: 6 }}>
+            <AdminText style={{ fontSize: 12, color: C.text }}>{f.label}</AdminText>
+            <TextInput style={styles.modalInput}
+              value={(form?.[section] as any)?.[f.key] ?? ''}
+              onChangeText={(v) => setField(section, f.key, v)}
+              placeholder={f.placeholder}
+              placeholderTextColor={C.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+        ))}
+      </AdminCard>
+    );
+  };
+
+  return (
+    <>
+      <AdminCard style={{ gap: 4 }}>
+        <View style={styles.sectionHeader}>
+          <View style={[styles.cardIconBox, { backgroundColor: C.purple + '12' }]}>
+            <Ionicons name="tv-outline" size={16} color={C.purple} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <AdminText bold style={{ fontSize: 15 }}>Ad Network Configuration</AdminText>
+            <AdminMuted style={{ fontSize: 11 }}>Single source of truth for all ad unit IDs</AdminMuted>
+          </View>
+        </View>
+        <AdminMuted style={{ fontSize: 11, lineHeight: 16 }}>
+          Changes take effect immediately across the entire platform. Ad IDs can only be changed from here.
+        </AdminMuted>
+      </AdminCard>
+
+      {renderSection('AdMob', 'logo-google', C.red, 'admob', [
+        { key: 'interstitialId', label: 'Interstitial ID', placeholder: 'ca-app-pub-xxx/yyy' },
+        { key: 'bannerId', label: 'Banner ID', placeholder: 'ca-app-pub-xxx/yyy' },
+        { key: 'rewardedId', label: 'Rewarded ID', placeholder: 'ca-app-pub-xxx/yyy' },
+      ])}
+
+      {renderSection('Unity Ads', 'game-controller', C.blue, 'unityAds', [
+        { key: 'gameId', label: 'Game ID', placeholder: '1234567' },
+      ])}
+
+      {renderSection('Meta Audience Network', 'logo-facebook', '#1877F2', 'audienceNetwork', [
+        { key: 'appId', label: 'App ID', placeholder: '123456789012345' },
+        { key: 'interstitialPlacementId', label: 'Interstitial Placement ID', placeholder: 'IMG_XX_XXXXXXXX' },
+        { key: 'bannerPlacementId', label: 'Banner Placement ID', placeholder: 'BANNER_XX_XXXXXXXX' },
+        { key: 'rewardedPlacementId', label: 'Rewarded Placement ID', placeholder: 'REWARDED_XX_XXXXXXXX' },
+      ])}
+
+      {!editMode ? (
+        <Pressable onPress={() => { initForm(); setEditMode(true); }}
+          style={({ pressed }) => [styles.primaryBtn, pressed && { opacity: 0.9 }]}>
+          <LinearGradient colors={[C.purple, '#6D28D9']} style={styles.primaryGradient}>
+            <Ionicons name="create-outline" size={18} color="#fff" />
+            <AdminText style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>Edit Ad Config</AdminText>
+          </LinearGradient>
+        </Pressable>
+      ) : (
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          <Pressable onPress={() => { setEditMode(false); setForm(null); }}
+            style={({ pressed }) => [{ flex: 1, height: 50, borderRadius: 25, borderWidth: 1, borderColor: C.surfaceBorder, alignItems: 'center', justifyContent: 'center' }, pressed && { opacity: 0.8 }]}>
+            <AdminText style={{ fontWeight: '600', color: C.textSecondary }}>Cancel</AdminText>
+          </Pressable>
+          <Pressable onPress={handleSave}
+            style={({ pressed }) => [{ flex: 1, borderRadius: 25, overflow: 'hidden' }, pressed && { opacity: 0.9 }]}>
+            <LinearGradient colors={[C.accent, C.accentDark]} style={{ height: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <AdminText style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>Save Changes</AdminText>
+            </LinearGradient>
+          </Pressable>
+        </View>
       )}
     </>
   );
@@ -1852,6 +2013,7 @@ export default function AdminPanelScreen() {
       case 'users': return <UsersTab state={state} dispatch={dispatch} />;
       case 'payouts': return <PayoutsTab state={state} dispatch={dispatch} />;
       case 'announcements': return <AnnouncementsTab state={state} dispatch={dispatch} />;
+      case 'ads': return <AdsControlTab state={state} dispatch={dispatch} />;
       case 'settings': return <SettingsTab state={state} dispatch={dispatch} />;
       case 'audit': return <AuditTab state={state} />;
     }
