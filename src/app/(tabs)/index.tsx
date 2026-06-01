@@ -119,7 +119,7 @@ export default function DashboardScreen() {
     setShowReward(true);
   }, [dispatch, state.balance, rewardAmount]);
 
-  const { showAd, adOverlay } = useAdReward(earnReward, rewardAmount);
+  const { showAd, adOverlay } = useAdReward(earnReward, rewardAmount, state.adConfig.admob.rewardedId);
 
   useEffect(() => {
     if (!showNoAdsToast) return;
@@ -129,7 +129,7 @@ export default function DashboardScreen() {
 
   const hasAdIds = useMemo(() => {
     const c = state.adConfig;
-    return !!(c?.admob?.interstitialId || c?.admob?.bannerId || c?.admob?.rewardedId ||
+    return !!(c?.admob?.appOpenId || c?.admob?.interstitialId || c?.admob?.bannerId || c?.admob?.rewardedId ||
       c?.unityAds?.gameId ||
       c?.audienceNetwork?.appId || c?.audienceNetwork?.interstitialPlacementId ||
       c?.audienceNetwork?.bannerPlacementId || c?.audienceNetwork?.rewardedPlacementId);

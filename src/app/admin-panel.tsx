@@ -9,7 +9,7 @@ import { SmartHeader } from '@/components/smart-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { AnnouncementModal } from '@/components/announcement-modal';
-import { useMockData, PlatformType, UserStatus, FollowTask, Announcement, AdConfig } from '@/context/MockDataContext';
+import { useMockData, PlatformType, UserStatus, FollowTask, Announcement, AdConfig, AIDynamicTask, AIQuiz, AIQuestion, AITaskType } from '@/context/MockDataContext';
 
 // ─── Light theme constants for admin panel ─────────────────────
 const C = {
@@ -29,7 +29,7 @@ const C = {
   inputBg: '#F0F1F5',
 };
 
-type AdminTab = 'dashboard' | 'orders' | 'tasks' | 'users' | 'payouts' | 'settings' | 'audit' | 'announcements' | 'ads';
+type AdminTab = 'dashboard' | 'orders' | 'tasks' | 'users' | 'payouts' | 'settings' | 'audit' | 'announcements' | 'ads' | 'ai';
 
 interface TabDef {
   key: AdminTab;
@@ -47,6 +47,7 @@ const TABS: TabDef[] = [
   { key: 'ads', icon: 'tv-outline', label: 'Ads' },
   { key: 'settings', icon: 'settings-outline', label: 'Settings' },
   { key: 'audit', icon: 'document-text-outline', label: 'Audit' },
+  { key: 'ai', icon: 'sparkles-outline', label: 'AI' },
 ];
 
 const PLATFORM_COLORS: Record<string, string> = {
@@ -90,6 +91,26 @@ function AdminText({ children, style, bold }: { children: React.ReactNode; style
 
 function AdminMuted({ children, style }: { children: React.ReactNode; style?: any }) {
   return <ThemedText style={[{ color: C.textSecondary, fontSize: 12 }, style]}>{children}</ThemedText>;
+}
+
+function AdminInput({ label, value, onChange, placeholder, multiline, keyboardType }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string;
+  multiline?: boolean; keyboardType?: 'default' | 'numeric';
+}) {
+  return (
+    <View>
+      <AdminText bold style={{ fontSize: 12, color: C.textSecondary, marginBottom: 4 }}>{label}</AdminText>
+      <TextInput
+        style={[styles.input, multiline && { height: 80, textAlignVertical: 'top', paddingTop: 12 }]}
+        value={value}
+        onChangeText={onChange}
+        placeholder={placeholder}
+        placeholderTextColor={C.textMuted}
+        multiline={multiline}
+        keyboardType={keyboardType}
+      />
+    </View>
+  );
 }
 
 function EmptyState({ icon, title, subtitle }: {
@@ -1383,77 +1404,120 @@ function AdsControlTab({ state, dispatch }: { state: any; dispatch: any }) {
     Alert.alert('Saved', 'Ad configuration updated across the platform');
   };
 
+  const getSectionStatus = (section: keyof AdConfig) => {
+    const config = adConfig[section] as Record<string, string>;
+    const values = Object.values(config);
+    const setCount = values.filter(v => v).length;
+    if (setCount === 0) return { label: 'Not Configured', color: C.textMuted, icon: 'alert-circle-outline' as const };
+    if (setCount === values.length) return { label: 'Fully Configured', color: C.accent, icon: 'checkmark-circle' as const };
+    return { label: 'Partial', color: C.orange, icon: 'alert-circle' as const };
+  };
+
   const renderSection = (title: string, icon: keyof typeof Ionicons.glyphMap, color: string, section: keyof AdConfig, fields: { key: string; label: string; placeholder: string }[]) => {
+    const status = getSectionStatus(section);
     if (!editMode) {
       const config = adConfig[section] as Record<string, string>;
-      const hasAny = Object.values(config).some(v => v);
       return (
         <AdminCard key={title}>
-          <View style={styles.sectionHeader}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
             <View style={[styles.cardIconBox, { backgroundColor: color + '12' }]}>
-              <Ionicons name={icon} size={16} color={color} />
+              <Ionicons name={icon} size={18} color={color} />
             </View>
-            <AdminText bold style={{ fontSize: 15 }}>{title}</AdminText>
+            <View style={{ flex: 1 }}>
+              <AdminText bold style={{ fontSize: 15 }}>{title}</AdminText>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                <Ionicons name={status.icon} size={11} color={status.color} />
+                <AdminMuted style={{ fontSize: 10, color: status.color }}>{status.label}</AdminMuted>
+              </View>
+            </View>
           </View>
           {fields.map((f, i) => (
-            <View key={f.key} style={[styles.settingRow, i < fields.length - 1 && { borderBottomWidth: 1, borderBottomColor: C.surfaceBorder }]}>
-              <AdminText style={{ flex: 1, fontSize: 13, color: C.text }}>{f.label}</AdminText>
-              <AdminText bold style={{ color: config[f.key] ? color : C.textMuted, fontSize: 12, maxWidth: 180, textAlign: 'right' }} numberOfLines={1}>
-                {config[f.key] || 'Not set'}
-              </AdminText>
+            <View key={f.key} style={[styles.idRow, i < fields.length - 1 && { borderBottomWidth: 1, borderBottomColor: C.surfaceBorder }]}>
+              <AdminText style={{ fontSize: 12, color: C.textSecondary, minWidth: 110 }}>{f.label}</AdminText>
+              <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                {config[f.key] ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ backgroundColor: color + '10', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                      <AdminText style={{ color, fontSize: 11, fontFamily: 'monospace' }}>{config[f.key]}</AdminText>
+                    </View>
+                  </View>
+                ) : (
+                  <AdminMuted style={{ fontSize: 11, fontStyle: 'italic' }}>Not set</AdminMuted>
+                )}
+              </View>
             </View>
           ))}
-          {!hasAny && (
-            <AdminMuted style={{ fontSize: 11, fontStyle: 'italic', marginTop: 4 }}>
-              No IDs configured — set them in edit mode
-            </AdminMuted>
-          )}
         </AdminCard>
       );
     }
     return (
       <AdminCard key={title}>
-        <View style={styles.sectionHeader}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
           <View style={[styles.cardIconBox, { backgroundColor: color + '12' }]}>
-            <Ionicons name={icon} size={16} color={color} />
+            <Ionicons name={icon} size={18} color={color} />
           </View>
           <AdminText bold style={{ fontSize: 15 }}>{title}</AdminText>
         </View>
         {fields.map(f => (
-          <View key={f.key} style={{ gap: 4, paddingVertical: 6 }}>
-            <AdminText style={{ fontSize: 12, color: C.text }}>{f.label}</AdminText>
-            <TextInput style={styles.modalInput}
-              value={(form?.[section] as any)?.[f.key] ?? ''}
-              onChangeText={(v) => setField(section, f.key, v)}
-              placeholder={f.placeholder}
-              placeholderTextColor={C.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
+          <View key={f.key} style={{ gap: 4, paddingVertical: 5 }}>
+            <AdminText style={{ fontSize: 12, color: C.textSecondary }}>{f.label}</AdminText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TextInput style={[styles.modalInput, { flex: 1 }]}
+                value={(form?.[section] as any)?.[f.key] ?? ''}
+                onChangeText={(v) => setField(section, f.key, v)}
+                placeholder={f.placeholder}
+                placeholderTextColor={C.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {(form?.[section] as any)?.[f.key] ? (
+                <Pressable onPress={() => setField(section, f.key, '')}
+                  style={{ padding: 6, borderRadius: 8, backgroundColor: C.inputBg }}>
+                  <Ionicons name="close-circle" size={16} color={C.textMuted} />
+                </Pressable>
+              ) : null}
+            </View>
           </View>
         ))}
       </AdminCard>
     );
   };
 
+  const allConfigured = useMemo(() => {
+    return Object.values(adConfig).every(section =>
+      Object.values(section as Record<string, string>).some(v => v)
+    );
+  }, [adConfig]);
+
   return (
     <>
-      <AdminCard style={{ gap: 4 }}>
-        <View style={styles.sectionHeader}>
-          <View style={[styles.cardIconBox, { backgroundColor: C.purple + '12' }]}>
-            <Ionicons name="tv-outline" size={16} color={C.purple} />
+      <Animated.View entering={FadeInDown.springify()}>
+        <AdminCard style={{ gap: 4 }}>
+          <View style={styles.sectionHeader}>
+            <View style={[styles.cardIconBox, { backgroundColor: C.purple + '12' }]}>
+              <Ionicons name="tv-outline" size={18} color={C.purple} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <AdminText bold style={{ fontSize: 15 }}>Ad Network Configuration</AdminText>
+              <AdminMuted style={{ fontSize: 11 }}>Single source of truth for all ad unit IDs</AdminMuted>
+            </View>
+            <View style={{ backgroundColor: allConfigured ? C.accent + '15' : C.orange + '12', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: allConfigured ? C.accent : C.orange }} />
+                <AdminText style={{ fontSize: 10, fontWeight: '600', color: allConfigured ? C.accent : C.orange }}>
+                  {allConfigured ? 'All Set' : 'Incomplete'}
+                </AdminText>
+              </View>
+            </View>
           </View>
-          <View style={{ flex: 1 }}>
-            <AdminText bold style={{ fontSize: 15 }}>Ad Network Configuration</AdminText>
-            <AdminMuted style={{ fontSize: 11 }}>Single source of truth for all ad unit IDs</AdminMuted>
-          </View>
-        </View>
-        <AdminMuted style={{ fontSize: 11, lineHeight: 16 }}>
-          Changes take effect immediately across the entire platform. Ad IDs can only be changed from here.
-        </AdminMuted>
-      </AdminCard>
+          <AdminMuted style={{ fontSize: 11, lineHeight: 16 }}>
+            Changes take effect immediately across the entire platform. Ad IDs can only be changed from here.
+          </AdminMuted>
+        </AdminCard>
+      </Animated.View>
 
       {renderSection('AdMob', 'logo-google', C.red, 'admob', [
+        { key: 'appOpenId', label: 'App Open Ad ID', placeholder: 'ca-app-pub-xxx/yyy' },
         { key: 'interstitialId', label: 'Interstitial ID', placeholder: 'ca-app-pub-xxx/yyy' },
         { key: 'bannerId', label: 'Banner ID', placeholder: 'ca-app-pub-xxx/yyy' },
         { key: 'rewardedId', label: 'Rewarded ID', placeholder: 'ca-app-pub-xxx/yyy' },
@@ -1492,6 +1556,351 @@ function AdsControlTab({ state, dispatch }: { state: any; dispatch: any }) {
           </Pressable>
         </View>
       )}
+    </>
+  );
+}
+
+// ─── AI Content Generator Tab ─────────────────────────────────────
+const AI_ICONS: { key: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { key: 'videocam', icon: 'videocam-outline' },
+  { key: 'star', icon: 'star-outline' },
+  { key: 'share-social', icon: 'share-social-outline' },
+  { key: 'clipboard', icon: 'clipboard-outline' },
+  { key: 'people', icon: 'people-outline' },
+  { key: 'bulb', icon: 'bulb-outline' },
+  { key: 'trophy', icon: 'trophy-outline' },
+  { key: 'rocket', icon: 'rocket-outline' },
+];
+
+const AI_TASK_TYPES: { key: AITaskType; label: string }[] = [
+  { key: 'daily', label: 'Daily' },
+  { key: 'weekly', label: 'Weekly' },
+  { key: 'challenge', label: 'Challenge' },
+];
+
+function AITab({ state, dispatch }: { state: any; dispatch: any }) {
+  const [section, setSection] = useState<'tasks' | 'quizzes'>('tasks');
+  const [showTaskForm, setShowTaskForm] = useState(false);
+  const [showQuizForm, setShowQuizForm] = useState(false);
+  const [editTask, setEditTask] = useState<AIDynamicTask | null>(null);
+  const [editQuiz, setEditQuiz] = useState<AIQuiz | null>(null);
+
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskDesc, setTaskDesc] = useState('');
+  const [taskType, setTaskType] = useState<AITaskType>('daily');
+  const [taskReward, setTaskReward] = useState('30');
+  const [taskInstructions, setTaskInstructions] = useState('');
+  const [taskLink, setTaskLink] = useState('');
+  const [taskIcon, setTaskIcon] = useState('star');
+
+  const [quizTitle, setQuizTitle] = useState('');
+  const [quizDesc, setQuizDesc] = useState('');
+  const [quizReward, setQuizReward] = useState('75');
+  const [quizPassing, setQuizPassing] = useState('2');
+  const [quizQuestions, setQuizQuestions] = useState<{ text: string; options: string[]; correct: number }[]>([]);
+
+  const resetTaskForm = () => {
+    setTaskTitle(''); setTaskDesc(''); setTaskType('daily'); setTaskReward('30');
+    setTaskInstructions(''); setTaskLink(''); setTaskIcon('star'); setEditTask(null);
+  };
+  const resetQuizForm = () => {
+    setQuizTitle(''); setQuizDesc(''); setQuizReward('75'); setQuizPassing('2');
+    setQuizQuestions([]); setEditQuiz(null);
+  };
+
+  const openEditTask = (t: AIDynamicTask) => {
+    setEditTask(t); setTaskTitle(t.title); setTaskDesc(t.description); setTaskType(t.type);
+    setTaskReward(String(t.reward)); setTaskInstructions(t.instructions || ''); setTaskLink(t.linkUrl || '');
+    setTaskIcon(t.icon || 'star'); setShowTaskForm(true);
+  };
+
+  const openEditQuiz = (q: AIQuiz) => {
+    setEditQuiz(q); setQuizTitle(q.title); setQuizDesc(q.description);
+    setQuizReward(String(q.reward)); setQuizPassing(String(q.passingScore));
+    setQuizQuestions(q.questions.map(qq => ({ text: qq.text, options: [...qq.options], correct: qq.correctIndex })));
+    setShowQuizForm(true);
+  };
+
+  const handleSaveTask = () => {
+    if (!taskTitle.trim()) { Alert.alert('Error', 'Title is required'); return; }
+    if (editTask) {
+      dispatch({ type: 'ADMIN_UPDATE_AI_TASK', task: { ...editTask, title: taskTitle, description: taskDesc, type: taskType, reward: parseInt(taskReward) || 0, instructions: taskInstructions || undefined, linkUrl: taskLink || undefined, icon: taskIcon } });
+    } else {
+      dispatch({ type: 'ADMIN_ADD_AI_TASK', task: { id: `ai-task-${Date.now()}`, title: taskTitle, description: taskDesc, type: taskType, reward: parseInt(taskReward) || 0, instructions: taskInstructions || undefined, linkUrl: taskLink || undefined, icon: taskIcon, createdAt: new Date().toISOString(), active: true } });
+    }
+    setShowTaskForm(false); resetTaskForm();
+  };
+
+  const handleSaveQuiz = () => {
+    if (!quizTitle.trim()) { Alert.alert('Error', 'Title is required'); return; }
+    if (quizQuestions.length === 0) { Alert.alert('Error', 'Add at least one question'); return; }
+    const questions: AIQuestion[] = quizQuestions.map((q, i) => ({ id: `q-${Date.now()}-${i}`, text: q.text, options: q.options, correctIndex: q.correct }));
+    if (editQuiz) {
+      dispatch({ type: 'ADMIN_UPDATE_QUIZ', quiz: { ...editQuiz, title: quizTitle, description: quizDesc, questions, reward: parseInt(quizReward) || 0, passingScore: parseInt(quizPassing) || 1 } });
+    } else {
+      dispatch({ type: 'ADMIN_ADD_QUIZ', quiz: { id: `quiz-${Date.now()}`, title: quizTitle, description: quizDesc, questions, reward: parseInt(quizReward) || 0, passingScore: parseInt(quizPassing) || 1, createdAt: new Date().toISOString(), active: true } });
+    }
+    setShowQuizForm(false); resetQuizForm();
+  };
+
+  const deleteTask = (id: string) => {
+    Alert.alert('Delete Task', 'Are you sure?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => dispatch({ type: 'ADMIN_REMOVE_AI_TASK', taskId: id }) },
+    ]);
+  };
+
+  const deleteQuiz = (id: string) => {
+    Alert.alert('Delete Quiz', 'Are you sure?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => dispatch({ type: 'ADMIN_REMOVE_QUIZ', quizId: id }) },
+    ]);
+  };
+
+  const toggleActive = (item: AIDynamicTask | AIQuiz, type: 'task' | 'quiz') => {
+    if (type === 'task') {
+      dispatch({ type: 'ADMIN_UPDATE_AI_TASK', task: { ...(item as AIDynamicTask), active: !(item as AIDynamicTask).active } });
+    } else {
+      dispatch({ type: 'ADMIN_UPDATE_QUIZ', quiz: { ...(item as AIQuiz), active: !(item as AIQuiz).active } });
+    }
+  };
+
+  return (
+    <>
+      <View style={[styles.section, { marginTop: 4 }]}>
+        <View style={styles.aiHeader}>
+          <View style={styles.aiHeaderLeft}>
+            <View style={[styles.aiIconWrap, { backgroundColor: C.purple + '15' }]}>
+              <Ionicons name="sparkles" size={22} color={C.purple} />
+            </View>
+            <View>
+              <AdminText bold style={{ fontSize: 18 }}>AI Content Generator</AdminText>
+              <AdminMuted>Create dynamic tasks and quizzes</AdminMuted>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.aiToggleRow}>
+          <Pressable
+            onPress={() => setSection('tasks')}
+            style={[styles.aiToggle, section === 'tasks' && { backgroundColor: C.accent + '15', borderColor: C.accent }]}
+          >
+            <Ionicons name="list-outline" size={18} color={section === 'tasks' ? C.accent : C.textSecondary} />
+            <AdminText style={[section === 'tasks' && { color: C.accent, fontWeight: '700' }]}>Tasks ({state.aiTasks.length})</AdminText>
+          </Pressable>
+          <Pressable
+            onPress={() => setSection('quizzes')}
+            style={[styles.aiToggle, section === 'quizzes' && { backgroundColor: C.blue + '15', borderColor: C.blue }]}
+          >
+            <Ionicons name="help-circle-outline" size={18} color={section === 'quizzes' ? C.blue : C.textSecondary} />
+            <AdminText style={[section === 'quizzes' && { color: C.blue, fontWeight: '700' }]}>Quizzes ({state.aiQuizzes.length})</AdminText>
+          </Pressable>
+        </View>
+      </View>
+
+      {section === 'tasks' ? (
+        <View style={styles.section}>
+          <View style={styles.aiToolbar}>
+            <AdminText bold style={{ fontSize: 15, color: C.text }}>AI Tasks</AdminText>
+            <Pressable
+              onPress={() => { resetTaskForm(); setShowTaskForm(true); }}
+              style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.accent, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 }, pressed && { opacity: 0.85 }]}
+            >
+              <Ionicons name="add" size={18} color="#fff" />
+              <AdminText style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>New Task</AdminText>
+            </Pressable>
+          </View>
+          <View style={{ gap: 10 }}>
+            {state.aiTasks.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingVertical: 40, gap: 8 }}>
+                <Ionicons name="sparkles-outline" size={40} color={C.textMuted} />
+                <AdminMuted>No AI tasks yet. Create your first one!</AdminMuted>
+              </View>
+            ) : state.aiTasks.map((t: AIDynamicTask) => (
+              <View key={t.id} style={[styles.aiCard, { borderLeftColor: !t.active ? C.textMuted : t.type === 'daily' ? C.accent : t.type === 'weekly' ? C.blue : C.purple, borderLeftWidth: 3 }]}>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Ionicons name={(t.icon || 'star') as any} size={16} color={C.text} />
+                    <AdminText bold style={{ fontSize: 14, flex: 1 }}>{t.title}</AdminText>
+                    <View style={{ flexDirection: 'row', gap: 4 }}>
+                      <Pressable onPress={() => openEditTask(t)} style={{ padding: 4 }}><Ionicons name="create-outline" size={16} color={C.blue} /></Pressable>
+                      <Pressable onPress={() => deleteTask(t.id)} style={{ padding: 4 }}><Ionicons name="trash-outline" size={16} color={C.red} /></Pressable>
+                    </View>
+                  </View>
+                  <AdminMuted numberOfLines={2}>{t.description}</AdminMuted>
+                  <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 4 }}>
+                    <View style={[styles.aiBadge, { backgroundColor: t.type === 'daily' ? C.accent + '15' : t.type === 'weekly' ? C.blue + '15' : C.purple + '15' }]}>
+                      <AdminText style={{ fontSize: 10, fontWeight: '700', color: t.type === 'daily' ? C.accent : t.type === 'weekly' ? C.blue : C.purple, textTransform: 'uppercase' }}>{t.type}</AdminText>
+                    </View>
+                    <AdminText bold style={{ fontSize: 12, color: C.accent }}>+{t.reward} PTS</AdminText>
+                    <Pressable onPress={() => toggleActive(t, 'task')} style={{ marginLeft: 'auto' }}>
+                      <Ionicons name={t.active ? 'checkmark-circle' : 'close-circle'} size={18} color={t.active ? C.accent : C.textMuted} />
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : (
+        <View style={styles.section}>
+          <View style={styles.aiToolbar}>
+            <AdminText bold style={{ fontSize: 15, color: C.text }}>AI Quizzes</AdminText>
+            <Pressable
+              onPress={() => { resetQuizForm(); setShowQuizForm(true); }}
+              style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.blue, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 }, pressed && { opacity: 0.85 }]}
+            >
+              <Ionicons name="add" size={18} color="#fff" />
+              <AdminText style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>New Quiz</AdminText>
+            </Pressable>
+          </View>
+          <View style={{ gap: 10 }}>
+            {state.aiQuizzes.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingVertical: 40, gap: 8 }}>
+                <Ionicons name="help-circle-outline" size={40} color={C.textMuted} />
+                <AdminMuted>No quizzes yet. Create your first one!</AdminMuted>
+              </View>
+            ) : state.aiQuizzes.map((q: AIQuiz) => (
+              <View key={q.id} style={[styles.aiCard, { borderLeftColor: !q.active ? C.textMuted : C.blue, borderLeftWidth: 3 }]}>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Ionicons name="help-circle" size={16} color={C.blue} />
+                    <AdminText bold style={{ fontSize: 14, flex: 1 }}>{q.title}</AdminText>
+                    <View style={{ flexDirection: 'row', gap: 4 }}>
+                      <Pressable onPress={() => openEditQuiz(q)} style={{ padding: 4 }}><Ionicons name="create-outline" size={16} color={C.blue} /></Pressable>
+                      <Pressable onPress={() => deleteQuiz(q.id)} style={{ padding: 4 }}><Ionicons name="trash-outline" size={16} color={C.red} /></Pressable>
+                    </View>
+                  </View>
+                  <AdminMuted numberOfLines={2}>{q.description}</AdminMuted>
+                  <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 4 }}>
+                    <AdminText style={{ fontSize: 11, color: C.textSecondary }}>{q.questions.length} questions</AdminText>
+                    <AdminText style={{ fontSize: 11, color: C.textSecondary }}>•</AdminText>
+                    <AdminText style={{ fontSize: 11, color: C.textSecondary }}>Pass: {q.passingScore}/{q.questions.length}</AdminText>
+                    <AdminText bold style={{ fontSize: 12, color: C.accent, marginLeft: 'auto' }}>+{q.reward} PTS</AdminText>
+                    <Pressable onPress={() => toggleActive(q, 'quiz')}>
+                      <Ionicons name={q.active ? 'checkmark-circle' : 'close-circle'} size={18} color={q.active ? C.accent : C.textMuted} />
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+
+      <Modal visible={showTaskForm} transparent animationType="fade" onRequestClose={() => { setShowTaskForm(false); resetTaskForm(); }}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '85%' }]}>
+            <View style={styles.modalHeader}>
+              <AdminText bold style={{ fontSize: 18 }}>{editTask ? 'Edit AI Task' : 'Create AI Task'}</AdminText>
+              <Pressable onPress={() => { setShowTaskForm(false); resetTaskForm(); }}><Ionicons name="close" size={24} color={C.text} /></Pressable>
+            </View>
+            <ScrollView style={{ gap: 12 }} contentContainerStyle={{ padding: 16, gap: 12 }}>
+              <AdminInput label="Title" value={taskTitle} onChange={setTaskTitle} placeholder="e.g. Watch Tech Review" />
+              <AdminInput label="Description" value={taskDesc} onChange={setTaskDesc} placeholder="Brief description of the task" multiline />
+              <View>
+                <AdminText bold style={{ fontSize: 12, color: C.textSecondary, marginBottom: 6 }}>Type</AdminText>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {AI_TASK_TYPES.map(tt => (
+                    <Pressable key={tt.key} onPress={() => setTaskType(tt.key)} style={[styles.aiTypeBtn, taskType === tt.key && { backgroundColor: tt.key === 'daily' ? C.accent + '15' : tt.key === 'weekly' ? C.blue + '15' : C.purple + '15', borderColor: tt.key === 'daily' ? C.accent : tt.key === 'weekly' ? C.blue : C.purple }]}>
+                      <AdminText style={{ fontSize: 12, fontWeight: '700', color: taskType === tt.key ? (tt.key === 'daily' ? C.accent : tt.key === 'weekly' ? C.blue : C.purple) : C.textSecondary }}>{tt.label}</AdminText>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+              <AdminInput label={`Reward (PTS)`} value={taskReward} onChange={setTaskReward} placeholder="30" keyboardType="numeric" />
+              <AdminInput label="Instructions (optional)" value={taskInstructions} onChange={setTaskInstructions} placeholder="What the user needs to do" multiline />
+              <AdminInput label="Link URL (optional)" value={taskLink} onChange={setTaskLink} placeholder="https://..." />
+              <View>
+                <AdminText bold style={{ fontSize: 12, color: C.textSecondary, marginBottom: 6 }}>Icon</AdminText>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row' }}>
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    {AI_ICONS.map(ic => (
+                      <Pressable key={ic.key} onPress={() => setTaskIcon(ic.key)} style={[styles.aiIconPicker, taskIcon === ic.key && { backgroundColor: C.accent + '15', borderColor: C.accent }]}>
+                        <Ionicons name={ic.icon} size={20} color={taskIcon === ic.key ? C.accent : C.textSecondary} />
+                      </Pressable>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 8, paddingTop: 16, borderTopWidth: 1, borderTopColor: C.surfaceBorder }}>
+                <Pressable onPress={() => { setShowTaskForm(false); resetTaskForm(); }} style={{ flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: C.surfaceBorder }}>
+                  <AdminText style={{ fontWeight: '600' }}>Cancel</AdminText>
+                </Pressable>
+                <Pressable onPress={handleSaveTask} style={{ flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 12, backgroundColor: C.accent }}>
+                  <AdminText style={{ color: '#fff', fontWeight: '700' }}>{editTask ? 'Update' : 'Create'}</AdminText>
+                </Pressable>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showQuizForm} transparent animationType="fade" onRequestClose={() => { setShowQuizForm(false); resetQuizForm(); }}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+            <View style={styles.modalHeader}>
+              <AdminText bold style={{ fontSize: 18 }}>{editQuiz ? 'Edit Quiz' : 'Create Quiz'}</AdminText>
+              <Pressable onPress={() => { setShowQuizForm(false); resetQuizForm(); }}><Ionicons name="close" size={24} color={C.text} /></Pressable>
+            </View>
+            <ScrollView style={{ gap: 12 }} contentContainerStyle={{ padding: 16, gap: 12 }}>
+              <AdminInput label="Title" value={quizTitle} onChange={setQuizTitle} placeholder="e.g. Social Media Knowledge" />
+              <AdminInput label="Description" value={quizDesc} onChange={setQuizDesc} placeholder="Quiz description" multiline />
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={{ flex: 1 }}><AdminInput label="Reward (PTS)" value={quizReward} onChange={setQuizReward} placeholder="75" keyboardType="numeric" /></View>
+                <View style={{ flex: 1 }}><AdminInput label="Passing Score" value={quizPassing} onChange={setQuizPassing} placeholder="2" keyboardType="numeric" /></View>
+              </View>
+              <View style={{ borderTopWidth: 1, borderTopColor: C.surfaceBorder, paddingTop: 12 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <AdminText bold style={{ fontSize: 14 }}>Questions ({quizQuestions.length})</AdminText>
+                  <Pressable onPress={() => setQuizQuestions([...quizQuestions, { text: '', options: ['', '', '', ''], correct: 0 }])} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.blue + '15', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+                    <Ionicons name="add" size={16} color={C.blue} />
+                    <AdminText style={{ fontSize: 12, fontWeight: '700', color: C.blue }}>Add Question</AdminText>
+                  </Pressable>
+                </View>
+                {quizQuestions.length === 0 && <AdminMuted style={{ textAlign: 'center', paddingVertical: 20 }}>No questions yet. Add one above.</AdminMuted>}
+                {quizQuestions.map((qq, qi) => (
+                  <View key={qi} style={{ backgroundColor: C.inputBg, borderRadius: 12, padding: 12, marginBottom: 10, gap: 8 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <AdminText bold style={{ fontSize: 12, color: C.blue }}>Question {qi + 1}</AdminText>
+                      <Pressable onPress={() => setQuizQuestions(quizQuestions.filter((_, i) => i !== qi))}><Ionicons name="close" size={18} color={C.red} /></Pressable>
+                    </View>
+                    <TextInput
+                      style={[styles.input, { fontSize: 13 }]}
+                      value={qq.text}
+                      onChangeText={txt => { const q = [...quizQuestions]; q[qi] = { ...q[qi], text: txt }; setQuizQuestions(q); }}
+                      placeholder="Enter question..."
+                      placeholderTextColor={C.textMuted}
+                    />
+                    {qq.options.map((opt, oi) => (
+                      <View key={oi} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Pressable onPress={() => { const q = [...quizQuestions]; q[qi] = { ...q[qi], correct: oi }; setQuizQuestions(q); }} style={[styles.radioBtn, qq.correct === oi && { backgroundColor: C.accent, borderColor: C.accent }]}>
+                          {qq.correct === oi && <Ionicons name="checkmark" size={12} color="#fff" />}
+                        </Pressable>
+                        <TextInput
+                          style={[styles.input, { flex: 1, fontSize: 13 }]}
+                          value={opt}
+                          onChangeText={txt => { const q = [...quizQuestions]; q[qi].options[oi] = txt; setQuizQuestions(q); }}
+                          placeholder={`Option ${oi + 1}`}
+                          placeholderTextColor={C.textMuted}
+                        />
+                      </View>
+                    ))}
+                  </View>
+                ))}
+              </View>
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 8, paddingTop: 16, borderTopWidth: 1, borderTopColor: C.surfaceBorder }}>
+                <Pressable onPress={() => { setShowQuizForm(false); resetQuizForm(); }} style={{ flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: C.surfaceBorder }}>
+                  <AdminText style={{ fontWeight: '600' }}>Cancel</AdminText>
+                </Pressable>
+                <Pressable onPress={handleSaveQuiz} style={{ flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 12, backgroundColor: C.blue }}>
+                  <AdminText style={{ color: '#fff', fontWeight: '700' }}>{editQuiz ? 'Update' : 'Create'}</AdminText>
+                </Pressable>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -2016,6 +2425,7 @@ export default function AdminPanelScreen() {
       case 'ads': return <AdsControlTab state={state} dispatch={dispatch} />;
       case 'settings': return <SettingsTab state={state} dispatch={dispatch} />;
       case 'audit': return <AuditTab state={state} />;
+      case 'ai': return <AITab state={state} dispatch={dispatch} />;
     }
   }, [activeTab, state, dispatch, handleVerify]);
 
@@ -2343,6 +2753,9 @@ const styles = StyleSheet.create({
   emptyIconWrap: { width: 80, height: 80, borderRadius: 40, backgroundColor: C.inputBg, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   emptyTitle: { fontSize: 18, marginTop: 4 },
 
+  // ID Row (Ad Config)
+  idRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10 },
+
   // Settings
   settingRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
   settingInput: {
@@ -2363,6 +2776,12 @@ const styles = StyleSheet.create({
   modalHeader: { padding: 24, gap: 8, alignItems: 'center' },
   modalHeaderIcon: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   modalBody: { padding: 24, gap: 12 },
+  input: {
+    height: 50, borderRadius: 14,
+    borderWidth: 1, borderColor: C.surfaceBorder,
+    paddingHorizontal: 14, fontSize: 16, color: C.text,
+    backgroundColor: C.inputBg,
+  },
   modalInput: {
     height: 50, borderRadius: 14,
     borderWidth: 1, borderColor: C.surfaceBorder,

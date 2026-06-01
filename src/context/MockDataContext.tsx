@@ -1,4 +1,5 @@
-import { createContext, useContext, useReducer, ReactNode } from 'react';
+import { createContext, useContext, useReducer, useEffect, useRef, ReactNode } from 'react';
+import { loadAdConfig, saveAdConfig } from '@/utils/persistence';
 
 export type PlatformType = 'facebook' | 'tiktok' | 'telegram' | 'youtube';
 export type OrderStatus = 'pending' | 'in-progress' | 'completed' | 'cancelled';
@@ -96,6 +97,7 @@ export interface Announcement {
 }
 
 export interface AdMobConfig {
+  appOpenId: string;
   interstitialId: string;
   bannerId: string;
   rewardedId: string;
@@ -133,6 +135,46 @@ export interface PlatformSettings {
   watchReward: number;
 }
 
+export type AITaskType = 'daily' | 'weekly' | 'challenge';
+
+export interface AIDynamicTask {
+  id: string;
+  title: string;
+  description: string;
+  type: AITaskType;
+  reward: number;
+  instructions?: string;
+  linkUrl?: string;
+  icon?: string;
+  createdAt: string;
+  active: boolean;
+}
+
+export interface AIQuestion {
+  id: string;
+  text: string;
+  options: string[];
+  correctIndex: number;
+}
+
+export interface AIQuiz {
+  id: string;
+  title: string;
+  description: string;
+  questions: AIQuestion[];
+  reward: number;
+  passingScore: number;
+  createdAt: string;
+  active: boolean;
+}
+
+export interface DailyChallengeEntry {
+  date: string;
+  completedTaskIds: string[];
+  completedQuizIds: string[];
+  totalEarned: number;
+}
+
 interface MockDataState {
   user: MockUser;
   connectedAccounts: ConnectedAccount[];
@@ -148,7 +190,9 @@ interface MockDataState {
   settings: PlatformSettings;
   announcements: Announcement[];
   adConfig: AdConfig;
-}
+  aiTasks: AIDynamicTask[];
+  aiQuizzes: AIQuiz[];
+  dailyChallenges: DailyChallengeEntry[];
 
 type MockAction =
   | { type: 'CONNECT_ACCOUNT'; platform: PlatformType }
@@ -174,7 +218,15 @@ type MockAction =
   | { type: 'ADMIN_UPDATE_ANNOUNCEMENT'; announcement: Announcement }
   | { type: 'ADMIN_REMOVE_ANNOUNCEMENT'; id: string }
   | { type: 'ADMIN_UPDATE_AD_CONFIG'; adConfig: Partial<AdConfig> }
-  | { type: 'SET_AVATAR'; avatarUrl: string };
+  | { type: 'SET_AVATAR'; avatarUrl: string }
+  | { type: 'ADMIN_ADD_AI_TASK'; task: AIDynamicTask }
+  | { type: 'ADMIN_UPDATE_AI_TASK'; task: AIDynamicTask }
+  | { type: 'ADMIN_REMOVE_AI_TASK'; taskId: string }
+  | { type: 'ADMIN_ADD_QUIZ'; quiz: AIQuiz }
+  | { type: 'ADMIN_UPDATE_QUIZ'; quiz: AIQuiz }
+  | { type: 'ADMIN_REMOVE_QUIZ'; quizId: string }
+  | { type: 'COMPLETE_AI_TASK'; taskId: string; reward: number }
+  | { type: 'COMPLETE_QUIZ'; quizId: string; reward: number };
 
 const PLATFORM_USERNAMES: Record<PlatformType, string[]> = {
   facebook: ['demo.user', 'john.doe', 'jane.smith'],
@@ -409,6 +461,58 @@ function mockReducer(state: MockDataState, action: MockAction): MockDataState {
           u.id === state.user.id ? { ...u, avatarUrl: action.avatarUrl } : u
         ),
       };
+    case 'ADMIN_ADD_AI_TASK':
+      return { ...state, aiTasks: [action.task, ...state.aiTasks] };
+    case 'ADMIN_UPDATE_AI_TASK':
+      return {
+        ...state,
+        aiTasks: state.aiTasks.map(t => t.id === action.task.id ? action.task : t),
+      };
+    case 'ADMIN_REMOVE_AI_TASK':
+      return {
+        ...state,
+        aiTasks: state.aiTasks.filter(t => t.id !== action.taskId),
+      };
+    case 'ADMIN_ADD_QUIZ':
+      return { ...state, aiQuizzes: [action.quiz, ...state.aiQuizzes] };
+    case 'ADMIN_UPDATE_QUIZ':
+      return {
+        ...state,
+        aiQuizzes: state.aiQuizzes.map(q => q.id === action.quiz.id ? action.quiz : q),
+      };
+    case 'ADMIN_REMOVE_QUIZ':
+      return {
+        ...state,
+        aiQuizzes: state.aiQuizzes.filter(q => q.id !== action.quizId),
+      };
+    case 'COMPLETE_AI_TASK': {
+      const today = new Date().toISOString().split('T')[0];
+      const existing = state.dailyChallenges.find(d => d.date === today);
+      const entry: DailyChallengeEntry = existing
+        ? { ...existing, completedTaskIds: [...existing.completedTaskIds, action.taskId], totalEarned: existing.totalEarned + action.reward }
+        : { date: today, completedTaskIds: [action.taskId], completedQuizIds: [], totalEarned: action.reward };
+      return {
+        ...state,
+        balance: state.balance + action.reward,
+        dailyChallenges: existing
+          ? state.dailyChallenges.map(d => d.date === today ? entry : d)
+          : [...state.dailyChallenges, entry],
+      };
+    }
+    case 'COMPLETE_QUIZ': {
+      const td = new Date().toISOString().split('T')[0];
+      const ex = state.dailyChallenges.find(d => d.date === td);
+      const en: DailyChallengeEntry = ex
+        ? { ...ex, completedQuizIds: [...ex.completedQuizIds, action.quizId], totalEarned: ex.totalEarned + action.reward }
+        : { date: td, completedTaskIds: [], completedQuizIds: [action.quizId], totalEarned: action.reward };
+      return {
+        ...state,
+        balance: state.balance + action.reward,
+        dailyChallenges: ex
+          ? state.dailyChallenges.map(d => d.date === td ? en : d)
+          : [...state.dailyChallenges, en],
+      };
+    }
     default:
       return state;
   }
@@ -507,6 +611,7 @@ const DEFAULT_SETTINGS: PlatformSettings = {
 
 const DEFAULT_AD_CONFIG: AdConfig = {
   admob: {
+    appOpenId: '',
     interstitialId: '',
     bannerId: '',
     rewardedId: '',
@@ -521,6 +626,44 @@ const DEFAULT_AD_CONFIG: AdConfig = {
     rewardedPlacementId: '',
   },
 };
+
+const SEED_AI_TASKS: AIDynamicTask[] = [
+  { id: 'ai-task-1', title: 'Watch Tech Review', description: 'Watch a 2-minute tech review video and share your thoughts', type: 'daily', reward: 30, instructions: 'Watch the video and write a brief comment', linkUrl: 'https://youtube.com/watch?v=demo', icon: 'videocam', createdAt: '2026-05-20T08:00:00Z', active: true },
+  { id: 'ai-task-2', title: 'Rate Your Experience', description: 'Rate your experience with the app today', type: 'daily', reward: 15, icon: 'star', createdAt: '2026-05-20T08:00:00Z', active: true },
+  { id: 'ai-task-3', title: 'Share on Social Media', description: 'Share a referral link on your social media', type: 'daily', reward: 50, instructions: 'Post the referral link on any social platform', linkUrl: 'https://view2earn.com/refer', icon: 'share-social', createdAt: '2026-05-20T08:00:00Z', active: true },
+  { id: 'ai-task-4', title: 'Weekly Survey', description: 'Complete our weekly survey about new features', type: 'weekly', reward: 100, instructions: 'Answer 5 questions about app features', icon: 'clipboard', createdAt: '2026-05-20T08:00:00Z', active: true },
+  { id: 'ai-task-5', title: 'Invite a Friend', description: 'Invite a friend to join View2Earn', type: 'challenge', reward: 200, instructions: 'Send your referral link to a friend and ask them to sign up', linkUrl: 'https://view2earn.com/refer', icon: 'people', createdAt: '2026-05-20T08:00:00Z', active: true },
+];
+
+const SEED_QUIZZES: AIQuiz[] = [
+  {
+    id: 'quiz-1',
+    title: 'Social Media Knowledge',
+    description: 'Test your knowledge about social media platforms',
+    questions: [
+      { id: 'q-1', text: 'Which platform has the most active users?', options: ['Facebook', 'Twitter', 'LinkedIn', 'Pinterest'], correctIndex: 0 },
+      { id: 'q-2', text: 'What does "impression" mean in social media?', options: ['A paid ad', 'Times content is displayed', 'Number of followers', 'A direct message'], correctIndex: 1 },
+      { id: 'q-3', text: 'Which platform is best for B2B marketing?', options: ['Instagram', 'TikTok', 'LinkedIn', 'Snapchat'], correctIndex: 2 },
+    ],
+    reward: 75,
+    passingScore: 2,
+    createdAt: '2026-05-20T08:00:00Z',
+    active: true,
+  },
+  {
+    id: 'quiz-2',
+    title: 'Digital Trends 2026',
+    description: 'How well do you know the latest digital trends?',
+    questions: [
+      { id: 'q-4', text: 'What is the predicted number of smartphone users by 2027?', options: ['5 billion', '6.8 billion', '7.5 billion', '4.2 billion'], correctIndex: 1 },
+      { id: 'q-5', text: 'Which technology is driving the most change in digital marketing?', options: ['Blockchain', 'AI/Machine Learning', 'Quantum Computing', 'VR/AR'], correctIndex: 1 },
+    ],
+    reward: 100,
+    passingScore: 1,
+    createdAt: '2026-05-20T08:00:00Z',
+    active: true,
+  },
+];
 
 const today = new Date().toISOString().split('T')[0];
 
@@ -552,10 +695,28 @@ const initialState: MockDataState = {
   settings: DEFAULT_SETTINGS,
   announcements: SEED_ANNOUNCEMENTS,
   adConfig: DEFAULT_AD_CONFIG,
+  aiTasks: SEED_AI_TASKS,
+  aiQuizzes: SEED_QUIZZES,
+  dailyChallenges: [],
 };
 
 export function MockDataProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(mockReducer, initialState);
+  const loadedRef = useRef(false);
+
+  useEffect(() => {
+    loadAdConfig().then(config => {
+      if (config) {
+        dispatch({ type: 'ADMIN_UPDATE_AD_CONFIG', adConfig: config });
+      }
+      loadedRef.current = true;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    saveAdConfig(state.adConfig);
+  }, [state.adConfig]);
 
   return (
     <MockDataContext.Provider value={{ state, dispatch }}>

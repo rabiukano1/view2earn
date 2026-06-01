@@ -1,10 +1,18 @@
 import { useState, useCallback } from 'react';
 import { RewardedAdOverlay } from '@/components/rewarded-ad-overlay';
 
-export function useAdReward(onEarnedReward: () => void, reward?: number) {
+export function useAdReward(onEarnedReward: () => void, reward?: number, adUnitId?: string) {
   const [adVisible, setAdVisible] = useState(false);
 
   const showAd = useCallback(() => {
+    try {
+      const { TurboModuleRegistry } = require('react-native');
+      if (!TurboModuleRegistry.get('RNGoogleMobileAdsModule')) {
+        return;
+      }
+    } catch {
+      return;
+    }
     setAdVisible(true);
   }, []);
 
@@ -23,6 +31,7 @@ export function useAdReward(onEarnedReward: () => void, reward?: number) {
       onComplete={handleComplete}
       onDismiss={handleDismiss}
       reward={reward}
+      adUnitId={adUnitId}
     />
   );
 

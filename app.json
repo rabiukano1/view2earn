@@ -42,7 +42,14 @@
           "photosPermission": "Allow $(PRODUCT_NAME) to access your photos to upload a profile picture."
         }
       ],
-      "expo-image"
+      "expo-image",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

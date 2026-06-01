@@ -1,18 +1,53 @@
+import { useState, useRef, useEffect } from 'react';
 import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import { useColorScheme } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import { AppOpenAdOverlay } from '@/components/app-open-ad-overlay';
 import AppTabs from '@/components/app-tabs';
+import { useMockData } from '@/context/MockDataContext';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
-  const insets = useSafeAreaInsets();
+  const { state } = useMockData();
+  const [showAppOpenAd, setShowAppOpenAd] = useState(false);
+  const [adsInited, setAdsInited] = useState(false);
+  const hasShownRef = useRef(false);
+
+  useEffect(() => {
+    try {
+      const { TurboModuleRegistry } = require('react-native');
+      if (!TurboModuleRegistry.get('RNGoogleMobileAdsModule')) {
+        setAdsInited(true);
+        return;
+      }
+      const { MobileAds } = require('react-native-google-mobile-ads');
+      MobileAds().initialize()
+        .then(() => setAdsInited(true))
+        .catch(() => setAdsInited(true));
+    } catch {
+      setAdsInited(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!adsInited) return;
+    if (hasShownRef.current) return;
+    const adUnitId = state.adConfig.admob.appOpenId;
+    if (!adUnitId) return;
+    hasShownRef.current = true;
+    setShowAppOpenAd(true);
+  }, [adsInited, state.adConfig.admob.appOpenId]);
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AnimatedSplashOverlay />
       <AppTabs />
+      <AppOpenAdOverlay
+        visible={showAppOpenAd}
+        adUnitId={state.adConfig.admob.appOpenId}
+        onDismiss={() => setShowAppOpenAd(false)}
+      />
     </ThemeProvider>
   );
 }

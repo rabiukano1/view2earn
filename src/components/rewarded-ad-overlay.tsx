@@ -1,74 +1,152 @@
-import { useEffect, useState, useRef } from 'react';
-import { Pressable, StyleSheet, View, Modal } from 'react-native';
-import Animated, {
-  FadeIn,
-  FadeOut,
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-} from 'react-native-reanimated';
+import { useEffect, useRef, useState } from 'react';
+import { StyleSheet, View, Modal, ActivityIndicator, Pressable } from 'react-native';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { ThemedText } from './themed-text';
 
-const BRANDS = [
-  { name: 'STARGEAR', tagline: 'Next-Gen Audio', color: '#FF6B35', gradient: ['#FF6B35', '#E04E1A'] as const },
-  { name: 'VELORA', tagline: 'Premium Skincare', color: '#D4A5E8', gradient: ['#D4A5E8', '#B388D6'] as const },
-  { name: 'NOVA', tagline: 'Smart Home Solutions', color: '#4FC3F7', gradient: ['#4FC3F7', '#0288D1'] as const },
-  { name: 'PULSE', tagline: 'Fitness Redefined', color: '#2ECC71', gradient: ['#2ECC71', '#1B8A4A'] as const },
-];
+const AD_LOAD_TIMEOUT = 15000;
 
 interface Props {
   visible: boolean;
   onComplete: () => void;
   onDismiss: () => void;
   reward?: number;
+  adUnitId?: string;
 }
 
-export function RewardedAdOverlay({ visible, onComplete, onDismiss, reward }: Props) {
-  const [countdown, setCountdown] = useState(10);
-  const [canSkip, setCanSkip] = useState(false);
-  const brand = useRef(BRANDS[Math.floor(Math.random() * BRANDS.length)]).current;
-  const completedRef = useRef(false);
-  const progress = useSharedValue(1);
+// Using dynamic TestIds from react-native-google-mobile-ads
+
+export function RewardedAdOverlay({ visible, onComplete, onDismiss, reward, adUnitId }: Props) {
+  const [showLoading, setShowLoading] = useState(false);
+  const dismissedRef = useRef(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const adRef = useRef<any>(null);
 
   useEffect(() => {
-    if (!visible) return;
-    completedRef.current = false;
-    setCountdown(10);
-    setCanSkip(false);
+    if (!visible) {
+      dismissedRef.current = false;
+      setShowLoading(false);
+      return;
+    }
 
-    progress.value = 1;
-    progress.value = withTiming(0, { duration: 10000 });
+    dismissedRef.current = false;
+    setShowLoading(true);
 
-    const timer = setInterval(() => {
-      setCountdown(prev => prev - 1);
-    }, 1000);
+    let RewardedAd: any;
+    let AdEventType: any;
+    let TestIds: any;
+    try {
+      const { TurboModuleRegistry } = require('react-native');
+      if (!TurboModuleRegistry.get('RNGoogleMobileAdsModule')) {
+        onDismiss();
+        return;
+      }
+      const gma = require('react-native-google-mobile-ads');
+      RewardedAd = gma.RewardedAd;
+      AdEventType = gma.AdEventType;
+      TestIds = gma.TestIds;
+    } catch {
+      onDismiss();
+      return;
+    }
 
-    const skipTimer = setTimeout(() => setCanSkip(true), 5000);
+    let actualAdUnitId = (adUnitId || '').trim();
+    
+    // If user pasted the Android or iOS test ID, use the dynamic TestIds.REWARDED 
+    // so it works correctly on their current platform.
+    if (
+      actualAdUnitId === 'ca-app-pub-3940256099942544/5224354917' || 
+      actualAdUnitId === 'ca-app-pub-3940256099942544/1712485313' ||
+      !actualAdUnitId
+    ) {
+      actualAdUnitId = TestIds.REWARDED;
+    }
+
+    let unsubLoaded: any;
+    let unsubClosed: any;
+    let unsubEarned: any;
+    let unsubError: any;
+
+    const cleanup = () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      if (unsubLoaded) unsubLoaded();
+      if (unsubClosed) unsubClosed();
+      if (unsubEarned) unsubEarned();
+      if (unsubError) unsubError();
+    };
+
+    let fallbackTried = false;
+
+    const loadAdWithId = (idToLoad: string) => {
+      const ad = RewardedAd.createForAdRequest(idToLoad, {
+        requestNonPersonalizedAdsOnly: true,
+      });
+      adRef.current = ad;
+
+      unsubLoaded = ad.addAdEventListener(AdEventType.LOADED, () => {
+        if (dismissedRef.current) return;
+        cleanup();
+        setShowLoading(false);
+        ad.show();
+      });
+
+      unsubClosed = ad.addAdEventListener(AdEventType.CLOSED, () => {
+        if (dismissedRef.current) return;
+        dismissedRef.current = true;
+        cleanup();
+        onDismiss();
+      });
+
+      unsubEarned = ad.addAdEventListener(AdEventType.EARNED_REWARD, () => {
+        if (dismissedRef.current) return;
+        dismissedRef.current = true;
+        cleanup();
+        onComplete();
+      });
+
+      unsubError = ad.addAdEventListener(AdEventType.ERROR, () => {
+        if (dismissedRef.current) return;
+        cleanup();
+        
+        // If the user's provided ID failed, automatically fallback to TestIds.REWARDED
+        if (!fallbackTried && idToLoad !== TestIds.REWARDED) {
+          fallbackTried = true;
+          timeoutRef.current = setTimeout(handleTimeout, AD_LOAD_TIMEOUT); // reset timeout for fallback
+          loadAdWithId(TestIds.REWARDED);
+        } else {
+          dismissedRef.current = true;
+          onDismiss();
+        }
+      });
+
+      ad.load();
+    };
+
+    const handleTimeout = () => {
+      if (!dismissedRef.current) {
+        dismissedRef.current = true;
+        cleanup();
+        onDismiss();
+      }
+    };
+
+    loadAdWithId(actualAdUnitId);
+
+    timeoutRef.current = setTimeout(handleTimeout, AD_LOAD_TIMEOUT);
 
     return () => {
-      clearInterval(timer);
-      clearTimeout(skipTimer);
+      cleanup();
     };
-  }, [visible, progress]);
+  }, [visible, onComplete, onDismiss]);
 
-  useEffect(() => {
-    if (!visible) return;
-    if (countdown > 0 || completedRef.current) return;
-    completedRef.current = true;
-    onComplete();
-  }, [countdown, visible, onComplete]);
-
-  const progressStyle = useAnimatedStyle(() => ({
-    width: `${progress.value * 100}%`,
-  }));
+  if (!visible || !showLoading) return null;
 
   return (
     <Modal visible={visible} transparent animationType="fade">
       <Animated.View
-        entering={FadeIn.duration(300)}
+        entering={FadeIn.duration(200)}
         exiting={FadeOut.duration(200)}
         style={styles.container}
       >
@@ -76,52 +154,13 @@ export function RewardedAdOverlay({ visible, onComplete, onDismiss, reward }: Pr
           colors={['#0a0a0f', '#1a1a2e']}
           style={StyleSheet.absoluteFill}
         />
-
-        <View style={styles.topBar}>
-          <View style={styles.adBadge}>
-            <ThemedText style={styles.adBadgeText}>SPONSORED</ThemedText>
-          </View>
-          {canSkip && (
-            <Pressable onPress={onDismiss} style={styles.skipBtn}>
-              <ThemedText style={styles.skipText}>Skip</ThemedText>
-              <Ionicons name="close" size={18} color="#fff" />
-            </Pressable>
-          )}
-        </View>
-
-        <View style={styles.content}>
+        <View style={styles.loadingContent}>
           <View style={styles.brandCircle}>
-            <Ionicons name="flash" size={40} color={brand.color} />
+            <Ionicons name="flash" size={44} color="#2ECC71" />
           </View>
-          <ThemedText style={[styles.brandName, { color: brand.color }]}>
-            {brand.name}
-          </ThemedText>
-          <ThemedText style={styles.brandTagline}>{brand.tagline}</ThemedText>
-
-          <View style={styles.ctaArea}>
-            <LinearGradient
-              colors={brand.gradient}
-              style={styles.ctaBtn}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            >
-              <Ionicons name="play" size={24} color="#fff" />
-              <ThemedText style={styles.ctaText}>Watch Ad</ThemedText>
-            </LinearGradient>
-          </View>
-        </View>
-
-        <View style={styles.bottomSection}>
-          <View style={styles.progressBar}>
-            <Animated.View style={[styles.progressFill, progressStyle]} />
-          </View>
-          <ThemedText style={styles.countdownText}>
-            Ad ends in {countdown}s
-          </ThemedText>
-          <View style={styles.rewardBadge}>
-            <Ionicons name="diamond" size={16} color="#2ECC71" />
-            <ThemedText style={styles.rewardText}>+{reward ?? 25} PTS on completion</ThemedText>
-          </View>
+          <ThemedText style={styles.brandName}>VIEW2EARN</ThemedText>
+          <ActivityIndicator size="large" color="#2ECC71" style={{ marginTop: 24 }} />
+          <ThemedText style={styles.loadingText}>Loading ad…</ThemedText>
         </View>
       </Animated.View>
     </Modal>
@@ -131,52 +170,17 @@ export function RewardedAdOverlay({ visible, onComplete, onDismiss, reward }: Pr
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'space-between',
-    paddingTop: 60,
-    paddingBottom: 40,
-    paddingHorizontal: 24,
   },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  adBadge: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  adBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.5)',
-    letterSpacing: 2,
-  },
-  skipBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-  },
-  skipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  content: {
+  loadingContent: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     gap: 16,
   },
   brandCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
     backgroundColor: 'rgba(255,255,255,0.05)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -184,64 +188,14 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.1)',
   },
   brandName: {
-    fontSize: 36,
+    fontSize: 28,
     fontWeight: '900',
     letterSpacing: 4,
-  },
-  brandTagline: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.6)',
-    fontWeight: '500',
-  },
-  ctaArea: {
-    marginTop: 32,
-  },
-  ctaBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 28,
-  },
-  ctaText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  bottomSection: {
-    alignItems: 'center',
-    gap: 12,
-  },
-  progressBar: {
-    width: '100%',
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#2ECC71',
-    borderRadius: 2,
-  },
-  countdownText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.5)',
-  },
-  rewardBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#2ECC7115',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  rewardText: {
-    fontSize: 13,
-    fontWeight: '600',
     color: '#2ECC71',
+  },
+  loadingText: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.5)',
+    fontWeight: '500',
   },
 });
