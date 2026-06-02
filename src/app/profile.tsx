@@ -46,6 +46,8 @@ export default function ProfileScreen() {
   const [adminTapCount, setAdminTapCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [showPasscode, setShowPasscode] = useState(false);
+  const [passcode, setPasscode] = useState('');
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -63,11 +65,21 @@ export default function ProfileScreen() {
 
     if (newCount >= 7) {
       setAdminTapCount(0);
-      router.push('/admin-panel');
-    } else {
-      Alert.alert('Profile', `Tap ${7 - newCount} more time${7 - newCount === 1 ? '' : 's'} to unlock admin panel`);
+      setPasscode('');
+      setShowPasscode(true);
     }
   }, [adminTapCount]);
+
+  const handlePasscodeSubmit = useCallback(() => {
+    if (passcode === '1234' || state.user.email === 'admin@view2earn.com') {
+      setShowPasscode(false);
+      setPasscode('');
+      router.push('/admin-panel');
+    } else {
+      Alert.alert('Access Denied', 'Invalid passcode');
+      setPasscode('');
+    }
+  }, [passcode, state.user.email]);
 
   const handlePickPhoto = useCallback((avatarUrl: string) => {
     dispatch({ type: 'SET_AVATAR', avatarUrl });
@@ -320,6 +332,36 @@ export default function ProfileScreen() {
           </Animated.View>
         </View>
       </Modal>
+
+      <Modal visible={showPasscode} transparent animationType="fade" onRequestClose={() => setShowPasscode(false)}>
+        <View style={styles.modalOverlay}>
+          <Animated.View entering={FadeInUp.duration(300).springify()} style={styles.passcodeModal}>
+            <View style={styles.passcodeHeader}>
+              <View style={[styles.passcodeIconWrap, { backgroundColor: '#2ECC7120' }]}>
+                <Ionicons name="shield-checkmark" size={28} color="#2ECC71" />
+              </View>
+              <ThemedText type="smallBold" style={{ fontSize: 18 }}>Admin Access</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">Enter passcode to continue</ThemedText>
+            </View>
+            <TextInput
+              style={styles.passcodeInput}
+              placeholder="••••"
+              placeholderTextColor={theme.textSecondary}
+              secureTextEntry
+              value={passcode}
+              onChangeText={setPasscode}
+              onSubmitEditing={handlePasscodeSubmit}
+              autoFocus
+            />
+            <Pressable onPress={handlePasscodeSubmit} style={({ pressed }) => [styles.passcodeSubmit, pressed && { opacity: 0.85 }]}>
+              <ThemedText type="smallBold" style={styles.passcodeSubmitText}>Unlock Panel</ThemedText>
+            </Pressable>
+            <Pressable onPress={() => { setShowPasscode(false); setPasscode(''); }} style={({ pressed }) => [styles.modalCancel, pressed && { opacity: 0.7 }]}>
+              <ThemedText type="smallBold" themeColor="textSecondary">Cancel</ThemedText>
+            </Pressable>
+          </Animated.View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -543,5 +585,46 @@ const styles = StyleSheet.create({
   modalCancel: {
     alignItems: 'center',
     paddingVertical: 12,
+  },
+  passcodeModal: {
+    backgroundColor: '#1C1C1E',
+    borderRadius: 24,
+    padding: 24,
+    gap: 20,
+    alignItems: 'center',
+  },
+  passcodeHeader: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  passcodeIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  passcodeInput: {
+    width: '100%',
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    color: '#FFFFFF',
+    fontSize: 20,
+    textAlign: 'center',
+    letterSpacing: 8,
+  },
+  passcodeSubmit: {
+    width: '100%',
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#2ECC71',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  passcodeSubmitText: {
+    color: '#FFFFFF',
+    fontSize: 15,
   },
 });

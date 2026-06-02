@@ -193,6 +193,7 @@ interface MockDataState {
   aiTasks: AIDynamicTask[];
   aiQuizzes: AIQuiz[];
   dailyChallenges: DailyChallengeEntry[];
+}
 
 type MockAction =
   | { type: 'CONNECT_ACCOUNT'; platform: PlatformType }

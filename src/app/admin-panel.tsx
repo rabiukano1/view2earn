@@ -89,8 +89,8 @@ function AdminText({ children, style, bold }: { children: React.ReactNode; style
   return <ThemedText style={[{ color: C.text }, bold && { fontWeight: '700' }, style]}>{children}</ThemedText>;
 }
 
-function AdminMuted({ children, style }: { children: React.ReactNode; style?: any }) {
-  return <ThemedText style={[{ color: C.textSecondary, fontSize: 12 }, style]}>{children}</ThemedText>;
+function AdminMuted({ children, style, numberOfLines }: { children: React.ReactNode; style?: any; numberOfLines?: number }) {
+  return <ThemedText numberOfLines={numberOfLines} style={[{ color: C.textSecondary, fontSize: 12 }, style]}>{children}</ThemedText>;
 }
 
 function AdminInput({ label, value, onChange, placeholder, multiline, keyboardType }: {
@@ -1791,7 +1791,7 @@ function AITab({ state, dispatch }: { state: any; dispatch: any }) {
       <Modal visible={showTaskForm} transparent animationType="fade" onRequestClose={() => { setShowTaskForm(false); resetTaskForm(); }}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { maxHeight: '85%' }]}>
-            <View style={styles.modalHeader}>
+            <View style={[styles.modalHeader, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
               <AdminText bold style={{ fontSize: 18 }}>{editTask ? 'Edit AI Task' : 'Create AI Task'}</AdminText>
               <Pressable onPress={() => { setShowTaskForm(false); resetTaskForm(); }}><Ionicons name="close" size={24} color={C.text} /></Pressable>
             </View>
@@ -1839,7 +1839,7 @@ function AITab({ state, dispatch }: { state: any; dispatch: any }) {
       <Modal visible={showQuizForm} transparent animationType="fade" onRequestClose={() => { setShowQuizForm(false); resetQuizForm(); }}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { maxHeight: '90%' }]}>
-            <View style={styles.modalHeader}>
+            <View style={[styles.modalHeader, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
               <AdminText bold style={{ fontSize: 18 }}>{editQuiz ? 'Edit Quiz' : 'Create Quiz'}</AdminText>
               <Pressable onPress={() => { setShowQuizForm(false); resetQuizForm(); }}><Ionicons name="close" size={24} color={C.text} /></Pressable>
             </View>
@@ -2789,6 +2789,25 @@ const styles = StyleSheet.create({
     backgroundColor: C.inputBg,
   },
   modalActions: { flexDirection: 'row', gap: 12, padding: 24, paddingTop: 0 },
+
+  // AI Tab
+  section: {},
+  aiHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  aiHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  aiIconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  aiToggleRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
+  aiToggle: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: C.surfaceBorder, backgroundColor: C.surface },
+  aiToolbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  aiCard: {
+    backgroundColor: C.surface, borderRadius: 14, padding: 14,
+    borderWidth: 1, borderColor: C.surfaceBorder,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
+  },
+  aiBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  aiTypeBtn: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: C.surfaceBorder, backgroundColor: C.surface },
+  aiIconPicker: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.surfaceBorder, backgroundColor: C.inputBg },
+  radioBtn: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: C.textMuted, alignItems: 'center', justifyContent: 'center' },
   modalBtn: { flex: 1, borderRadius: 24, overflow: 'hidden' },
   modalBtnOutline: { height: 48, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.surfaceBorder },
   modalBtnSolid: { height: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },

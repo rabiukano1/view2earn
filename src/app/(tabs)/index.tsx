@@ -37,6 +37,7 @@ const CORE_ACTIONS: QuickAction[] = [
   { icon: 'gift-outline', iconColor: '#8B5CF6', gradient: ['#8B5CF620', '#8B5CF605'], title: 'Rewards', subtitle: 'Claim bonuses', route: '/follow-to-earn' },
   { icon: 'people-outline', iconColor: '#2ECC71', gradient: ['#2ECC7120', '#2ECC7105'], title: 'Refer', subtitle: 'Invite friends', route: '/' },
   { icon: 'stats-chart', iconColor: '#F59E0B', gradient: ['#F59E0B20', '#F59E0B05'], title: 'Stats', subtitle: 'Analytics', route: '/' },
+  { icon: 'sparkles', iconColor: '#8B5CF6', gradient: ['#8B5CF620', '#8B5CF605'], title: 'Challenges', subtitle: 'Daily tasks & quizzes', route: '/daily-challenges' },
 ];
 
 const SOCIAL_ACTIONS: QuickAction[] = [

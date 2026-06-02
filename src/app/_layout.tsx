@@ -32,6 +32,10 @@ export default function RootLayout() {
           name="admin-panel"
           options={{ animation: 'slide_from_right' }}
         />
+        <Stack.Screen
+          name="daily-challenges"
+          options={{ animation: 'slide_from_right' }}
+        />
       </Stack>
       <StatusBar style="light" />
     </MockDataProvider>
