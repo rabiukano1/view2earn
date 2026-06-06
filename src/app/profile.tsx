@@ -33,10 +33,10 @@ interface MenuItem {
 }
 
 const MENU_ITEMS: MenuItem[] = [
-  { icon: 'send-outline', iconColor: '#2ECC71', label: 'Send Points', route: '/' },
-  { icon: 'wallet-outline', iconColor: '#3B82F6', label: 'Wallet', route: '/' },
+  { icon: 'send-outline', iconColor: '#2ECC71', label: 'Send Points', route: '' },
+  { icon: 'wallet-outline', iconColor: '#3B82F6', label: 'Wallet', route: '/(tabs)/wallet' },
   { icon: 'time-outline', iconColor: '#8B5CF6', label: 'History', route: '/follower-orders' },
-  { icon: 'help-circle-outline', iconColor: '#F59E0B', label: 'Help Center', route: '/' },
+  { icon: 'help-circle-outline', iconColor: '#F59E0B', label: 'Help Center', route: '' },
 ];
 
 export default function ProfileScreen() {
@@ -116,7 +116,7 @@ export default function ProfileScreen() {
   const handleLogout = useCallback(() => {
     Alert.alert('Log Out', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Log Out', style: 'destructive', onPress: () => router.replace('/(tabs)') },
+      { text: 'Log Out', style: 'destructive', onPress: () => router.replace('/(auth)/sign-in') },
     ]);
   }, []);
 

@@ -15,19 +15,7 @@ export default function TabLayout() {
   const hasShownRef = useRef(false);
 
   useEffect(() => {
-    try {
-      const { TurboModuleRegistry } = require('react-native');
-      if (!TurboModuleRegistry.get('RNGoogleMobileAdsModule')) {
-        setAdsInited(true);
-        return;
-      }
-      const { MobileAds } = require('react-native-google-mobile-ads');
-      MobileAds().initialize()
-        .then(() => setAdsInited(true))
-        .catch(() => setAdsInited(true));
-    } catch {
-      setAdsInited(true);
-    }
+    setAdsInited(true);
   }, []);
 
   useEffect(() => {

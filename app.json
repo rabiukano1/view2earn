@@ -44,13 +44,6 @@
       ],
       "expo-image",
       [
-        "react-native-google-mobile-ads",
-        {
-          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
-          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
-        }
-      ],
-      [
         "expo-camera",
         {
           "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera for completing photo tasks.",
@@ -71,7 +64,8 @@
           "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone for audio recording.",
           "enableBackgroundPlayback": true
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,
