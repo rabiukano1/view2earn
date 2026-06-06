@@ -9,7 +9,8 @@ import { SmartHeader } from '@/components/smart-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
-import { useMockData, PlatformType, MOCK_FACEBOOK_PAGES, FacebookPage } from '@/context/MockDataContext';
+import { useMockData, PlatformType, MOCK_FACEBOOK_PAGES, FacebookPage, TikTokProfileData } from '@/context/MockDataContext';
+import { extractUsernameFromUrl, scrapeUserTikTokProfileWithRetry } from '@/services/tiktok-scraper';
 
 type VerifyMethod = 'username' | 'link' | 'qrcode';
 
@@ -48,6 +49,7 @@ export default function SocialConnectScreen() {
   const [verifyMethod, setVerifyMethod] = useState<VerifyMethod>('username');
   const [verifyInput, setVerifyInput] = useState('');
   const [verifyError, setVerifyError] = useState('');
+  const [verifyLoading, setVerifyLoading] = useState(false);
   const [fbPages, setFbPages] = useState<FacebookPage[]>([]);
   const [fbPageStep, setFbPageStep] = useState<'login' | 'pages' | 'verify'>('login');
 
@@ -82,7 +84,7 @@ export default function SocialConnectScreen() {
     closeVerification();
   }, [dispatch, closeVerification]);
 
-  const handleVerify = useCallback(() => {
+  const handleVerify = useCallback(async () => {
     const trimmed = verifyInput.trim();
     const platform = verifyPlatform!;
 
@@ -100,47 +102,74 @@ export default function SocialConnectScreen() {
         setVerifyError('Enter a valid Facebook link (facebook.com/...)');
         return;
       }
-      } else if (platform === 'tiktok') {
-        if (!trimmed) {
-          setVerifyError('Enter your TikTok info');
+      dispatch({ type: 'CONNECT_ACCOUNT', platform });
+      closeVerification();
+    } else if (platform === 'tiktok') {
+      if (!trimmed) {
+        setVerifyError('Enter your TikTok info');
+        return;
+      }
+
+      let username: string | null = null;
+      if (verifyMethod === 'username') {
+        const clean = trimmed.replace(/^@/, '');
+        if (clean.length < 2) {
+          setVerifyError('Enter a valid username (min 2 characters)');
           return;
         }
-        if (verifyMethod === 'username') {
-          const clean = trimmed.replace(/^@/, '');
-          if (clean.length < 2) {
-            setVerifyError('Enter a valid username (min 2 characters)');
-            return;
-          }
-        } else if (verifyMethod === 'link') {
-          const valid = trimmed.includes('tiktok.com') || trimmed.includes('vm.tiktok');
-          if (!valid) {
-            setVerifyError('Enter a valid TikTok link (tiktok.com/...)');
-            return;
-          }
-        }
-      } else if (platform === 'youtube') {
-        if (!trimmed) {
-          setVerifyError('Enter your YouTube info');
+        username = clean;
+      } else if (verifyMethod === 'link') {
+        const valid = trimmed.includes('tiktok.com') || trimmed.includes('vm.tiktok');
+        if (!valid) {
+          setVerifyError('Enter a valid TikTok link (tiktok.com/...)');
           return;
         }
-        if (verifyMethod === 'username') {
-          const clean = trimmed.replace(/^@/, '');
-          if (clean.length < 2) {
-            setVerifyError('Enter a valid username (min 2 characters)');
-            return;
-          }
-        } else if (verifyMethod === 'link') {
-          const valid = trimmed.includes('youtube.com') || trimmed.includes('youtu.be');
-          if (!valid) {
-            setVerifyError('Enter a valid YouTube link (youtube.com/@...)');
-            return;
-          }
+        username = extractUsernameFromUrl(trimmed);
+        if (!username) {
+          setVerifyError('Could not extract username from that link');
+          return;
         }
       }
 
-    setVerifyError('');
-    dispatch({ type: 'CONNECT_ACCOUNT', platform });
-    closeVerification();
+      if (!username) {
+        setVerifyError('Enter a valid TikTok username or link');
+        return;
+      }
+
+      setVerifyLoading(true);
+      setVerifyError('');
+
+      try {
+        const profile = await scrapeUserTikTokProfileWithRetry(username);
+        dispatch({ type: 'CONNECT_TIKTOK', profile });
+        closeVerification();
+      } catch (err: any) {
+        setVerifyError(err?.message || 'Could not verify. Try again');
+      } finally {
+        setVerifyLoading(false);
+      }
+    } else if (platform === 'youtube') {
+      if (!trimmed) {
+        setVerifyError('Enter your YouTube info');
+        return;
+      }
+      if (verifyMethod === 'username') {
+        const clean = trimmed.replace(/^@/, '');
+        if (clean.length < 2) {
+          setVerifyError('Enter a valid username (min 2 characters)');
+          return;
+        }
+      } else if (verifyMethod === 'link') {
+        const valid = trimmed.includes('youtube.com') || trimmed.includes('youtu.be');
+        if (!valid) {
+          setVerifyError('Enter a valid YouTube link (youtube.com/@...)');
+          return;
+        }
+      }
+      setVerifyError('');
+      dispatch({ type: 'CONNECT_ACCOUNT', platform });
+      closeVerification();
+    }
   }, [verifyInput, verifyMethod, verifyPlatform, dispatch, closeVerification]);
 
   const handleDisconnect = useCallback((id: string, name: string) => {
@@ -681,25 +710,32 @@ export default function SocialConnectScreen() {
               {verifyPlatform === 'facebook' && fbPageStep === 'pages' ? null : (
                 <Pressable
                   onPress={handleVerify}
+                  disabled={verifyLoading}
                   style={({ pressed }) => [
-                    { transform: [{ scale: pressed ? 0.97 : 1 }] },
+                    { transform: [{ scale: pressed && !verifyLoading ? 0.97 : 1 }] },
                   ]}
                 >
                   <LinearGradient
                     colors={['#2ECC71', '#27ae60']}
-                    style={styles.verifyBtn}
+                    style={[styles.verifyBtn, verifyLoading && { opacity: 0.6 }]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                   >
-                    <Ionicons name="checkmark-circle" size={20} color="#000" />
+                    {verifyLoading ? (
+                      <Ionicons name="sync" size={20} color="#000" />
+                    ) : (
+                      <Ionicons name="checkmark-circle" size={20} color="#000" />
+                    )}
                     <ThemedText style={styles.verifyBtnText}>
-                      {verifyPlatform === 'facebook'
-                        ? fbPageStep === 'login'
-                          ? 'Continue with Facebook'
-                          : 'Verify & Connect Page'
-                        : verifyMethod === 'qrcode'
-                          ? 'I Scanned the QR Code'
-                          : 'Verify & Connect'}
+                      {verifyLoading
+                        ? 'Verifying...'
+                        : verifyPlatform === 'facebook'
+                          ? fbPageStep === 'login'
+                            ? 'Continue with Facebook'
+                            : 'Verify & Connect Page'
+                          : verifyMethod === 'qrcode'
+                            ? 'I Scanned the QR Code'
+                            : 'Verify & Connect'}
                     </ThemedText>
                   </LinearGradient>
                 </Pressable>

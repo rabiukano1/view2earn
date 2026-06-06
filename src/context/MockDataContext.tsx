@@ -17,6 +17,8 @@ export interface ConnectedAccount {
   pageId?: string;
   pageAccessToken?: string;
   pageUrl?: string;
+  followingCount?: number;
+  profileUrl?: string;
 }
 
 export interface FollowerOrder {
@@ -175,6 +177,43 @@ export interface DailyChallengeEntry {
   totalEarned: number;
 }
 
+export interface TikTokProfileData {
+  username: string;
+  displayName: string;
+  followingCount: number;
+  followersCount: number;
+  isPrivate: boolean;
+  avatarUrl?: string;
+  profileUrl: string;
+}
+
+export type TikTokVerificationStep =
+  | 'idle'
+  | 'scraping_before'
+  | 'browser_open'
+  | 'awaiting_follow'
+  | 'scraping_after'
+  | 'verifying'
+  | 'success'
+  | 'failed';
+
+export interface TikTokVerificationState {
+  step: TikTokVerificationStep;
+  userBefore?: { followingCount: number; followersCount: number };
+  targetBefore?: { followingCount: number; followersCount: number };
+  userAfter?: { followingCount: number; followersCount: number };
+  targetAfter?: { followingCount: number; followersCount: number };
+  error?: string;
+}
+
+export interface VerificationAttempt {
+  id: string;
+  taskId: string;
+  targetUsername: string;
+  passed: boolean;
+  timestamp: string;
+}
+
 interface MockDataState {
   user: MockUser;
   connectedAccounts: ConnectedAccount[];
@@ -193,11 +232,13 @@ interface MockDataState {
   aiTasks: AIDynamicTask[];
   aiQuizzes: AIQuiz[];
   dailyChallenges: DailyChallengeEntry[];
+  verificationAttempts: VerificationAttempt[];
 }
 
 type MockAction =
   | { type: 'CONNECT_ACCOUNT'; platform: PlatformType }
   | { type: 'CONNECT_FACEBOOK_PAGE'; page: FacebookPage }
+  | { type: 'CONNECT_TIKTOK'; profile: TikTokProfileData }
   | { type: 'DISCONNECT_ACCOUNT'; id: string }
   | { type: 'PLACE_ORDER'; order: FollowerOrder }
   | { type: 'CANCEL_ORDER'; id: string }
@@ -227,7 +268,10 @@ type MockAction =
   | { type: 'ADMIN_UPDATE_QUIZ'; quiz: AIQuiz }
   | { type: 'ADMIN_REMOVE_QUIZ'; quizId: string }
   | { type: 'COMPLETE_AI_TASK'; taskId: string; reward: number }
-  | { type: 'COMPLETE_QUIZ'; quizId: string; reward: number };
+  | { type: 'COMPLETE_QUIZ'; quizId: string; reward: number }
+  | { type: 'UPDATE_TIKTOK_PROFILE'; accountId: string; profile: Partial<TikTokProfileData> }
+  | { type: 'SET_VERIFIED_FOLLOW_RESULT'; taskId: string; verified: boolean; reward?: number }
+  | { type: 'RECORD_VERIFICATION_ATTEMPT'; taskId: string; targetUsername: string; passed: boolean };
 
 const PLATFORM_USERNAMES: Record<PlatformType, string[]> = {
   facebook: ['demo.user', 'john.doe', 'jane.smith'],
@@ -267,7 +311,7 @@ const FOLLOW_TASKS: FollowTask[] = [
 
 const initialAccounts: ConnectedAccount[] = [
   { id: 'acct-1', platform: 'facebook', username: 'demo.user', displayName: 'Demo User', isConnected: true, followersCount: 845 },
-  { id: 'acct-2', platform: 'tiktok', username: '@demouser_official', displayName: 'Demo User', isConnected: true, followersCount: 389 },
+  { id: 'acct-2', platform: 'tiktok', username: '@demouser_official', displayName: 'Demo User', isConnected: true, followersCount: 389, followingCount: 512, profileUrl: 'https://www.tiktok.com/@demouser_official' },
   { id: 'acct-3', platform: 'telegram', username: '@demo_user_tg', displayName: 'Demo User', isConnected: true, followersCount: 512 },
   { id: 'acct-4', platform: 'youtube', username: '@DemoUserYT', displayName: 'Demo User', isConnected: true, followersCount: 1240 },
 ];
@@ -514,6 +558,83 @@ function mockReducer(state: MockDataState, action: MockAction): MockDataState {
           : [...state.dailyChallenges, en],
       };
     }
+    case 'CONNECT_TIKTOK': {
+      const used = state.connectedAccounts.find(a => a.platform === 'tiktok');
+      if (used) {
+        return {
+          ...state,
+          connectedAccounts: state.connectedAccounts.map(a =>
+            a.platform === 'tiktok'
+              ? { ...a, username: action.profile.username, displayName: action.profile.displayName, followersCount: action.profile.followersCount, followingCount: action.profile.followingCount, profileUrl: action.profile.profileUrl, avatarUrl: action.profile.avatarUrl, isConnected: true }
+              : a
+          ),
+        };
+      }
+      const newAccount: ConnectedAccount = {
+        id: `acct-${Date.now()}`,
+        platform: 'tiktok',
+        username: action.profile.username,
+        displayName: action.profile.displayName,
+        isConnected: true,
+        followersCount: action.profile.followersCount,
+        followingCount: action.profile.followingCount,
+        profileUrl: action.profile.profileUrl,
+        avatarUrl: action.profile.avatarUrl,
+      };
+      return { ...state, connectedAccounts: [...state.connectedAccounts, newAccount] };
+    }
+    case 'UPDATE_TIKTOK_PROFILE': {
+      return {
+        ...state,
+        connectedAccounts: state.connectedAccounts.map(a =>
+          a.id === action.accountId
+            ? { ...a, ...action.profile }
+            : a
+        ),
+      };
+    }
+    case 'SET_VERIFIED_FOLLOW_RESULT': {
+      const task = state.followTasks.find(t => t.id === action.taskId);
+      if (!task) return state;
+      if (!action.verified) {
+        return {
+          ...state,
+          verificationAttempts: [
+            ...state.verificationAttempts,
+            { id: `v-${Date.now()}`, taskId: action.taskId, targetUsername: task.channelName, passed: false, timestamp: new Date().toISOString() },
+          ],
+        };
+      }
+      if (state.completedFollowTasks.includes(action.taskId)) return state;
+      const plat = task.platform;
+      const platSet = state.settings.platforms[plat];
+      const reward = action.reward ?? platSet.rewardPerFollow;
+      const perPlatCompleted = state.completedFollowTasksPerPlatform[plat] || [];
+      const bonusSteps = perPlatCompleted.length + 1 === platSet.bonusAtTasks;
+      return {
+        ...state,
+        completedFollowTasks: [...state.completedFollowTasks, action.taskId],
+        completedFollowTasksPerPlatform: {
+          ...state.completedFollowTasksPerPlatform,
+          [plat]: [...perPlatCompleted, action.taskId],
+        },
+        dailyFollowCount: state.dailyFollowCount + 1,
+        balance: state.balance + reward + (bonusSteps ? platSet.bonusAmount : 0),
+        verificationAttempts: [
+          ...state.verificationAttempts,
+          { id: `v-${Date.now()}`, taskId: action.taskId, targetUsername: task.channelName, passed: true, timestamp: new Date().toISOString() },
+        ],
+      };
+    }
+    case 'RECORD_VERIFICATION_ATTEMPT': {
+      return {
+        ...state,
+        verificationAttempts: [
+          ...state.verificationAttempts,
+          { id: `v-${Date.now()}`, taskId: action.taskId, targetUsername: action.targetUsername, passed: action.passed, timestamp: new Date().toISOString() },
+        ],
+      };
+    }
     default:
       return state;
   }
@@ -699,6 +820,7 @@ const initialState: MockDataState = {
   aiTasks: SEED_AI_TASKS,
   aiQuizzes: SEED_QUIZZES,
   dailyChallenges: [],
+  verificationAttempts: [],
 };
 
 export function MockDataProvider({ children }: { children: ReactNode }) {
