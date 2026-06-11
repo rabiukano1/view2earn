@@ -7,6 +7,7 @@ import { router } from 'expo-router';
 import { requireOptionalNativeModule } from 'expo-modules-core';
 
 import { ThemedText } from '@/components/themed-text';
+import { useAuth } from '@/context/AuthContext';
 
 const GREEN = '#2ECC71';
 const GREEN_DARK = '#27ae60';
@@ -16,10 +17,13 @@ function getLA() {
 }
 
 export default function SignIn() {
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [bioAvailable, setBioAvailable] = useState(false);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -37,8 +41,16 @@ export default function SignIn() {
     })();
   }, []);
 
-  const handleSignIn = () => {
-    router.replace('/(tabs)');
+  const handleSignIn = async () => {
+    setError('');
+    setSubmitting(true);
+    const result = await signIn(email, password);
+    setSubmitting(false);
+    if (result.error) {
+      setError(result.error);
+    } else {
+      router.replace('/(tabs)');
+    }
   };
 
   const handleBiometric = useCallback(async () => {
@@ -109,14 +121,18 @@ export default function SignIn() {
             <ThemedText style={styles.forgotText}>Forgot password?</ThemedText>
           </Pressable>
 
+          {error ? (
+            <ThemedText style={styles.errorText}>{error}</ThemedText>
+          ) : null}
+
           <LinearGradient
-            colors={[GREEN, GREEN_DARK]}
+            colors={submitting ? ['#555', '#444'] : [GREEN, GREEN_DARK]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.button}
           >
-            <Pressable onPress={handleSignIn} style={styles.buttonInner}>
-              <ThemedText style={styles.buttonText}>Sign In</ThemedText>
+            <Pressable onPress={handleSignIn} disabled={submitting} style={styles.buttonInner}>
+              <ThemedText style={styles.buttonText}>{submitting ? 'Signing in...' : 'Sign In'}</ThemedText>
             </Pressable>
           </LinearGradient>
 
@@ -148,6 +164,11 @@ export default function SignIn() {
 }
 
 const styles = StyleSheet.create({
+  errorText: {
+    color: '#ff4444',
+    fontSize: 14,
+    textAlign: 'center',
+  },
   container: {
     flex: 1,
   },

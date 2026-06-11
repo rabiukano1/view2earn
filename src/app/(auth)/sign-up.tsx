@@ -1,23 +1,36 @@
 import { useState } from 'react';
-import { StyleSheet, View, TextInput, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
+import { StyleSheet, View, TextInput, KeyboardAvoidingView, Platform, Pressable, Alert } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
+import { useAuth } from '@/context/AuthContext';
 
 const GREEN = '#2ECC71';
 const GREEN_DARK = '#27ae60';
 
 export default function SignUp() {
+  const { signUp } = useAuth();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSignUp = () => {
-    router.replace('/(tabs)');
+  const handleSignUp = async () => {
+    setError('');
+    setSubmitting(true);
+    const result = await signUp(email, password);
+    setSubmitting(false);
+    if (result.error) {
+      setError(result.error);
+    } else {
+      Alert.alert('Check your email', 'We sent you a confirmation link to verify your account.');
+      router.replace('/(auth)/sign-in');
+    }
   };
 
   return (
@@ -79,14 +92,18 @@ export default function SignUp() {
             </Pressable>
           </View>
 
+          {error ? (
+            <ThemedText style={styles.errorText}>{error}</ThemedText>
+          ) : null}
+
           <LinearGradient
-            colors={[GREEN, GREEN_DARK]}
+            colors={submitting ? ['#555', '#444'] : [GREEN, GREEN_DARK]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.button}
           >
-            <Pressable onPress={handleSignUp} style={styles.buttonInner}>
-              <ThemedText style={styles.buttonText}>Create Account</ThemedText>
+            <Pressable onPress={handleSignUp} disabled={submitting} style={styles.buttonInner}>
+              <ThemedText style={styles.buttonText}>{submitting ? 'Creating Account...' : 'Create Account'}</ThemedText>
             </Pressable>
           </LinearGradient>
 
@@ -107,6 +124,11 @@ export default function SignUp() {
 }
 
 const styles = StyleSheet.create({
+  errorText: {
+    color: '#ff4444',
+    fontSize: 14,
+    textAlign: 'center',
+  },
   container: {
     flex: 1,
   },
