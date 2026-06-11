@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useState, ReactNode, Platform } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { Platform } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';

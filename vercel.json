@@ -11,8 +11,12 @@
       "handle": "filesystem"
     },
     {
-      "src": "/(.*)",
+      "src": "/",
       "dest": "/index.html"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/$1.html"
     }
   ]
 }
