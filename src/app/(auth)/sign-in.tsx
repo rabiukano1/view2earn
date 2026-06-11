@@ -17,13 +17,14 @@ function getLA() {
 }
 
 export default function SignIn() {
-  const { signIn } = useAuth();
+  const { signIn, signInWithGoogle } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [bioAvailable, setBioAvailable] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -136,19 +137,28 @@ export default function SignIn() {
             </Pressable>
           </LinearGradient>
 
-          {bioAvailable && (
-            <>
-              <View style={styles.divider}>
-                <View style={styles.dividerLine} />
-                <ThemedText style={styles.dividerText}>or</ThemedText>
-                <View style={styles.dividerLine} />
-              </View>
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <ThemedText style={styles.dividerText}>or</ThemedText>
+            <View style={styles.dividerLine} />
+          </View>
 
-              <Pressable onPress={handleBiometric} style={styles.bioButton}>
-                <Ionicons name="finger-print" size={24} color={GREEN} />
-                <ThemedText style={styles.bioText}>Sign in with biometrics</ThemedText>
-              </Pressable>
-            </>
+          <Pressable
+            onPress={async () => { setGoogleLoading(true); await signInWithGoogle(); setGoogleLoading(false); }}
+            disabled={googleLoading}
+            style={styles.googleButton}
+          >
+            <Ionicons name="logo-google" size={22} color="#fff" />
+            <ThemedText style={styles.googleText}>
+              {googleLoading ? 'Redirecting...' : 'Sign in with Google'}
+            </ThemedText>
+          </Pressable>
+
+          {bioAvailable && (
+            <Pressable onPress={handleBiometric} style={styles.bioButton}>
+              <Ionicons name="finger-print" size={24} color={GREEN} />
+              <ThemedText style={styles.bioText}>Sign in with biometrics</ThemedText>
+            </Pressable>
           )}
         </Animated.View>
 
@@ -164,6 +174,11 @@ export default function SignIn() {
 }
 
 const styles = StyleSheet.create({
+  googleButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: '#fff',
+  },
+  googleText: { color: '#fff', fontSize: 16, fontWeight: 600 },
   errorText: {
     color: '#ff4444',
     fontSize: 14,

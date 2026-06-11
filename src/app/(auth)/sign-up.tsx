@@ -12,13 +12,14 @@ const GREEN = '#2ECC71';
 const GREEN_DARK = '#27ae60';
 
 export default function SignUp() {
-  const { signUp } = useAuth();
+  const { signUp, signInWithGoogle } = useAuth();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const handleSignUp = async () => {
     setError('');
@@ -107,6 +108,23 @@ export default function SignUp() {
             </Pressable>
           </LinearGradient>
 
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <ThemedText style={styles.dividerText}>or</ThemedText>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <Pressable
+            onPress={async () => { setGoogleLoading(true); await signInWithGoogle(); setGoogleLoading(false); }}
+            disabled={googleLoading}
+            style={styles.googleButton}
+          >
+            <Ionicons name="logo-google" size={22} color="#fff" />
+            <ThemedText style={styles.googleText}>
+              {googleLoading ? 'Redirecting...' : 'Sign up with Google'}
+            </ThemedText>
+          </Pressable>
+
           <ThemedText style={styles.terms}>
             By signing up, you agree to our Terms of Service and Privacy Policy.
           </ThemedText>
@@ -124,6 +142,11 @@ export default function SignUp() {
 }
 
 const styles = StyleSheet.create({
+  googleButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: '#fff',
+  },
+  googleText: { color: '#fff', fontSize: 16, fontWeight: 600 },
   errorText: {
     color: '#ff4444',
     fontSize: 14,
@@ -196,6 +219,20 @@ const styles = StyleSheet.create({
     color: '#000',
     fontSize: 18,
     fontWeight: 700,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  dividerText: {
+    color: '#8B949E',
+    fontSize: 14,
   },
   terms: {
     color: '#8B949E',

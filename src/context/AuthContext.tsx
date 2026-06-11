@@ -1,5 +1,7 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, Platform } from 'react';
 import { Session, User } from '@supabase/supabase-js';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
 
 interface UserProfile {
@@ -18,6 +20,7 @@ interface AuthContextType {
   loading: boolean;
   signUp: (email: string, password: string, fullName?: string) => Promise<{ error?: string }>;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -29,6 +32,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   signUp: async () => ({}),
   signIn: async () => ({}),
+  signInWithGoogle: async () => {},
   signOut: async () => {},
   refreshProfile: async () => {},
 });
@@ -115,6 +119,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   };
 
+  const signInWithGoogle = async () => {
+    const redirectUrl = Platform.OS === 'web'
+      ? window.location.origin
+      : Linking.createURL('/');
+
+    const { data } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: redirectUrl },
+    });
+
+    if (data?.url) {
+      if (Platform.OS === 'web') {
+        window.location.href = data.url;
+      } else {
+        await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+      }
+    }
+  };
+
   const refreshProfile = async () => {
     if (!user) return;
     const p = await fetchProfile(user.id);
@@ -122,7 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, loading, signUp, signIn, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ session, user, profile, loading, signUp, signIn, signInWithGoogle, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
