@@ -23,7 +23,7 @@ export default function SignUp() {
   const handleSignUp = async () => {
     setError('');
     setSubmitting(true);
-    const result = await signUp(email, password);
+    const result = await signUp(email, password, fullName);
     setSubmitting(false);
     if (result.error) {
       setError(result.error);

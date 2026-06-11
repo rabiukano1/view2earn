@@ -1,5 +1,6 @@
 import { createContext, useContext, useReducer, useEffect, useRef, ReactNode } from 'react';
 import { loadAdConfig, saveAdConfig } from '@/utils/persistence';
+import { useAuth } from '@/context/AuthContext';
 
 export type PlatformType = 'facebook' | 'tiktok' | 'telegram' | 'youtube';
 export type OrderStatus = 'pending' | 'in-progress' | 'completed' | 'cancelled';
@@ -271,7 +272,8 @@ type MockAction =
   | { type: 'COMPLETE_QUIZ'; quizId: string; reward: number }
   | { type: 'UPDATE_TIKTOK_PROFILE'; accountId: string; profile: Partial<TikTokProfileData> }
   | { type: 'SET_VERIFIED_FOLLOW_RESULT'; taskId: string; verified: boolean; reward?: number }
-  | { type: 'RECORD_VERIFICATION_ATTEMPT'; taskId: string; targetUsername: string; passed: boolean };
+  | { type: 'RECORD_VERIFICATION_ATTEMPT'; taskId: string; targetUsername: string; passed: boolean }
+  | { type: 'SET_AUTH_USER'; user: Partial<MockUser> };
 
 const PLATFORM_USERNAMES: Record<PlatformType, string[]> = {
   facebook: ['demo.user', 'john.doe', 'jane.smith'],
@@ -635,6 +637,12 @@ function mockReducer(state: MockDataState, action: MockAction): MockDataState {
         ],
       };
     }
+    case 'SET_AUTH_USER': {
+      return {
+        ...state,
+        user: { ...state.user, ...action.user },
+      };
+    }
     default:
       return state;
   }
@@ -826,6 +834,21 @@ const initialState: MockDataState = {
 export function MockDataProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(mockReducer, initialState);
   const loadedRef = useRef(false);
+  const { user: authUser, profile } = useAuth();
+
+  useEffect(() => {
+    if (authUser) {
+      dispatch({
+        type: 'SET_AUTH_USER',
+        user: {
+          id: authUser.id,
+          email: authUser.email ?? '',
+          fullName: profile?.full_name ?? authUser.user_metadata?.full_name ?? authUser.email?.split('@')[0] ?? 'User',
+          avatarUrl: profile?.avatar_url,
+        },
+      });
+    }
+  }, [authUser?.id, profile?.full_name, profile?.avatar_url]);
 
   useEffect(() => {
     loadAdConfig().then(config => {

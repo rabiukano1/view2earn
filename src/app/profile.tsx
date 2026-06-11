@@ -11,6 +11,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
 import { useMockData, PlatformType } from '@/context/MockDataContext';
+import { useAuth } from '@/context/AuthContext';
 
 const PRESET_AVATARS = [
   { icon: 'person', color: '#2ECC71', bg: '#2ECC7120', label: 'Green' },
@@ -43,6 +44,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const { state, dispatch } = useMockData();
+  const { profile, signOut } = useAuth();
   const [adminTapCount, setAdminTapCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
@@ -116,9 +118,9 @@ export default function ProfileScreen() {
   const handleLogout = useCallback(() => {
     Alert.alert('Log Out', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Log Out', style: 'destructive', onPress: () => router.replace('/(auth)/sign-in') },
+      { text: 'Log Out', style: 'destructive', onPress: () => signOut() },
     ]);
-  }, []);
+  }, [signOut]);
 
   const activeOrders = state.orders.filter(o => o.status === 'pending' || o.status === 'in-progress').length;
 
@@ -160,7 +162,7 @@ export default function ProfileScreen() {
                 <Ionicons name="camera" size={12} color="#FFFFFF" />
               </Pressable>
             </Pressable>
-            <ThemedText type="smallBold" style={styles.profileName}>{state.user.fullName}</ThemedText>
+            <ThemedText type="smallBold" style={styles.profileName}>{profile?.full_name ?? state.user.fullName}</ThemedText>
             <Pressable onPress={() => handleCopy('UID', state.user.id)} style={styles.copyChip}>
               <ThemedText type="small" themeColor="textSecondary">{state.user.id.slice(0, 8)}</ThemedText>
               <Ionicons name="copy-outline" size={14} color={theme.textSecondary} />
