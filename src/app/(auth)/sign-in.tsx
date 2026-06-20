@@ -4,38 +4,17 @@ import Animated, { FadeInUp } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { requireOptionalNativeModule } from 'expo-modules-core';
+import * as LocalAuthentication from 'expo-local-authentication';
+
 
 import { ThemedText } from '@/components/themed-text';
 import { useAuth } from '@/context/AuthContext';
 
 const GREEN = '#2ECC71';
 const GREEN_DARK = '#27ae60';
-const BIO_PROMPTED_KEY = 'bio_prompted';
-
-let _ss: { getItemAsync: (k: string) => Promise<string | null>; setItemAsync: (k: string, v: string) => Promise<void>; deleteItemAsync: (k: string) => Promise<void> } | null = null;
-function getSecureStore() {
-  if (_ss) return _ss;
-  const native = requireOptionalNativeModule('ExpoSecureStore');
-  if (!native) return null;
-  if (typeof native.getItemAsync === 'function') { _ss = native; return _ss; }
-  if (typeof native.getValueWithKeyAsync === 'function') {
-    _ss = {
-      getItemAsync: (k: string) => native.getValueWithKeyAsync(k),
-      setItemAsync: (k: string, v: string) => native.setValueWithKeyAsync(v, k),
-      deleteItemAsync: (k: string) => native.deleteValueWithKeyAsync(k),
-    };
-    return _ss;
-  }
-  return null;
-}
-
-function getLA() {
-  return requireOptionalNativeModule('ExpoLocalAuthentication');
-}
 
 export default function SignIn() {
-  const { signIn, signInWithGoogle, signInWithBiometrics, biometricsAvailable, enableBiometrics, hasBiometricHardware } = useAuth();
+  const { signIn, signInWithGoogle, signInWithBiometrics, biometricsAvailable, hasBiometricHardware } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -43,31 +22,7 @@ export default function SignIn() {
   const [submitting, setSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
-  const promptEnableBiometrics = useCallback(async () => {
-    if (!hasBiometricHardware || biometricsAvailable) return;
-    try {
-      const SS = getSecureStore();
-      if (!SS) return;
-      const alreadyPrompted = await SS.getItemAsync(BIO_PROMPTED_KEY);
-      if (alreadyPrompted) return;
-      await SS.setItemAsync(BIO_PROMPTED_KEY, '1');
-    } catch {
-      return;
-    }
-    Alert.alert(
-      'Enable Biometric Login?',
-      'Would you like to sign in with your fingerprint next time?',
-      [
-        { text: 'Not Now', style: 'cancel' },
-        {
-          text: 'Enable',
-          onPress: async () => {
-            await enableBiometrics();
-          },
-        },
-      ]
-    );
-  }, [hasBiometricHardware, biometricsAvailable, enableBiometrics]);
+
 
   const handleSignIn = async () => {
     setError('');
@@ -77,7 +32,6 @@ export default function SignIn() {
     if (result.error) {
       setError(result.error);
     } else {
-      promptEnableBiometrics();
       router.replace('/(tabs)');
     }
   };
@@ -88,9 +42,7 @@ export default function SignIn() {
         Alert.alert('Not Set Up', 'Enable biometric login from your Profile settings first.');
         return;
       }
-      const LA = getLA();
-      if (!LA) return;
-      const result = await LA.authenticateAsync({
+      const result = await LocalAuthentication.authenticateAsync({
         promptMessage: 'Unlock your account',
         fallbackLabel: 'Use password instead',
         disableDeviceFallback: false,

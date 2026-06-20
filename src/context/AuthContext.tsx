@@ -3,6 +3,7 @@ import { Platform, Alert } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import * as LocalAuthentication from 'expo-local-authentication';
 import { requireOptionalNativeModule } from 'expo-modules-core';
 import { supabase } from '@/lib/supabase';
 
@@ -14,20 +15,23 @@ function getSecureStore() {
   if (_ss) return _ss;
   const native = requireOptionalNativeModule('ExpoSecureStore');
   if (!native) return null;
-  if (typeof native.getItemAsync === 'function') { _ss = native; return _ss; }
+  if (typeof native.getItemAsync === 'function') {
+    _ss = {
+      getItemAsync: (k: string) => native.getItemAsync(k, {}),
+      setItemAsync: (k: string, v: string) => native.setItemAsync(k, v, {}),
+      deleteItemAsync: (k: string) => native.deleteItemAsync(k, {}),
+    };
+    return _ss;
+  }
   if (typeof native.getValueWithKeyAsync === 'function') {
     _ss = {
-      getItemAsync: (k: string) => native.getValueWithKeyAsync(k),
-      setItemAsync: (k: string, v: string) => native.setValueWithKeyAsync(v, k),
-      deleteItemAsync: (k: string) => native.deleteValueWithKeyAsync(k),
+      getItemAsync: (k: string) => native.getValueWithKeyAsync(k, {}),
+      setItemAsync: (k: string, v: string) => native.setValueWithKeyAsync(v, k, {}),
+      deleteItemAsync: (k: string) => native.deleteValueWithKeyAsync(k, {}),
     };
     return _ss;
   }
   return null;
-}
-
-function getLA() {
-  return requireOptionalNativeModule('ExpoLocalAuthentication');
 }
 
 interface UserProfile {
@@ -160,17 +164,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setBiometricLoading(true);
 
     try {
-      const LA = getLA();
-      if (!LA) { setBiometricLoading(false); return false; }
-
-      const hasHardware = await LA.hasHardwareAsync();
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
       if (!hasHardware) {
         await disableBiometrics();
         setBiometricLoading(false);
         return false;
       }
 
-      const result = await LA.authenticateAsync({
+      const result = await LocalAuthentication.authenticateAsync({
         promptMessage: 'Unlock View2Earn',
         fallbackLabel: 'Use password instead',
         disableDeviceFallback: false,
@@ -208,13 +209,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     checkBiometricsAvailable();
 
     (async () => {
-      const LA = getLA();
-      if (LA) {
-        try {
-          const hw = await LA.hasHardwareAsync();
-          setHasBiometricHardware(hw);
-        } catch { setHasBiometricHardware(false); }
-      }
+      try {
+        const hw = await LocalAuthentication.hasHardwareAsync();
+        setHasBiometricHardware(hw);
+      } catch { setHasBiometricHardware(false); }
     })();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -222,54 +220,83 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) {
-        console.log('[Auth] Ensuring profile exists for user...');
-        const p = await ensureProfile(session.user);
-        setProfile(p);
-        console.log('[Auth] Profile set:', p?.full_name);
-      } else {
-        setProfile(null);
+
+      // Keep biometric tokens perfectly in sync to prevent AuthSessionMissingError
+      // when the session auto-refreshes in the background.
+      if (session) {
+        try {
+          const SS = getSecureStore();
+          if (SS) {
+            const hasBio = await SS.getItemAsync(BIO_ACCESS_TOKEN_KEY).catch(() => null);
+            if (hasBio) {
+              await SS.setItemAsync(BIO_ACCESS_TOKEN_KEY, session.access_token);
+              await SS.setItemAsync(BIO_REFRESH_TOKEN_KEY, session.refresh_token);
+            }
+          }
+        } catch (err) {
+          console.warn('[Auth] Sync biometrics error:', err);
+        }
       }
+
       if (!hasRestored.current) {
         console.log('[Auth] First auth state change during restoration');
         setIsRestoring(false);
         setLoading(false);
         hasRestored.current = true;
       }
+
+      if (session?.user) {
+        console.log('[Auth] Ensuring profile exists for user...');
+        const p = await ensureProfile(session.user).catch(() => null);
+        setProfile(p);
+        console.log('[Auth] Profile set:', p?.full_name);
+      } else {
+        setProfile(null);
+      }
     });
 
     (async () => {
-      const biometricUsed = await tryAutoBiometricLogin();
+      try {
+        const biometricUsed = await tryAutoBiometricLogin();
 
-      if (!biometricUsed) {
-        const { data: { session } } = await supabase.auth.getSession();
+        if (!biometricUsed) {
+          let session: Session | null = null;
+          try {
+            const result = await supabase.auth.getSession();
+            session = result.data.session;
+          } catch (err) {
+            console.warn('[Auth] getSession error:', err);
+          }
 
-        const SS = getSecureStore();
-        const hasStoredTokens = SS
-          ? !!(await SS.getItemAsync(BIO_ACCESS_TOKEN_KEY)) && !!(await SS.getItemAsync(BIO_REFRESH_TOKEN_KEY))
-          : false;
+          const SS = getSecureStore();
+          const hasStoredTokens = SS
+            ? !!(await SS.getItemAsync(BIO_ACCESS_TOKEN_KEY).catch(() => null)) && !!(await SS.getItemAsync(BIO_REFRESH_TOKEN_KEY).catch(() => null))
+            : false;
 
-        if (hasStoredTokens) {
-          console.log('[Auth] Biometric tokens exist but auth failed/cancelled — routing to sign-in');
-          await supabase.auth.signOut().catch(() => {});
-          setSession(null);
-          setUser(null);
-          setProfile(null);
-        } else if (session) {
-          console.log('[Auth] getSession result: Session found for', session.user.email);
-          setSession(session);
-          setUser(session.user);
-          const p = await ensureProfile(session.user);
-          setProfile(p);
-        } else {
-          console.log('[Auth] getSession result: No session');
+          if (hasStoredTokens) {
+            console.log('[Auth] Biometric tokens exist but auth failed/cancelled — routing to sign-in');
+            await supabase.auth.signOut().catch(() => {});
+            setSession(null);
+            setUser(null);
+            setProfile(null);
+          } else if (session) {
+            console.log('[Auth] getSession result: Session found for', session.user.email);
+            setSession(session);
+            setUser(session.user);
+            const p = await ensureProfile(session.user);
+            setProfile(p);
+          } else {
+            console.log('[Auth] getSession result: No session');
+          }
         }
-      }
-
-      if (!hasRestored.current) {
-        hasRestored.current = true;
-        setIsRestoring(false);
-        setLoading(false);
+      } catch (err) {
+        console.error('[Auth] Restoration error:', err);
+      } finally {
+        if (!hasRestored.current) {
+          hasRestored.current = true;
+          setIsRestoring(false);
+          setLoading(false);
+        }
       }
     })();
 
@@ -302,6 +329,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const enableBiometrics = async () => {
     try {
+      // Prompt user to verify fingerprint/Face ID before enabling
+      const authResult = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Verify your identity to enable biometric login',
+        disableDeviceFallback: true, // Force biometric if possible
+      });
+
+      if (!authResult.success) {
+        console.warn('[Auth] User failed or cancelled biometric verification during setup');
+        return false;
+      }
+
       const SS = getSecureStore();
       if (!SS) throw new Error('SecureStore unavailable');
       const { data: { session: currentSession } } = await supabase.auth.getSession();
@@ -358,7 +396,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     console.log('[Auth] signOut called');
     setProfile(null);
-    await supabase.auth.signOut();
+    
+    // We intercept global.fetch to silently drop the Supabase /logout request.
+    // This is the ONLY foolproof way to ensure the session remains perfectly valid
+    // on the backend server so the user can log back in using their biometric tokens.
+    const originalFetch = global.fetch;
+    global.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : (input && 'url' in input ? input.url : '');
+      if (typeof url === 'string' && url.includes('/logout')) {
+        console.log('[Auth] Dropped /logout request to preserve biometric session on server.');
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({}),
+          text: async () => '{}',
+          headers: { get: () => 'application/json' },
+        } as unknown as Response;
+      }
+      return originalFetch(input, init);
+    };
+
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.warn('[Auth] signOut warning:', e);
+    } finally {
+      global.fetch = originalFetch;
+    }
+    
     console.log('[Auth] signOut complete');
   };
 

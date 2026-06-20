@@ -25,12 +25,20 @@ const isWeb = Platform.OS === 'web';
 
 function createSecureStoreAdapter() {
   if (isWeb) {
-    if (typeof window === 'undefined' || !window.localStorage) throw new Error('No localStorage');
-    console.log('[Supabase] Using localStorage for web');
+    if (typeof window !== 'undefined' && window.localStorage) {
+      console.log('[Supabase] Using localStorage for web');
+      return {
+        getItem: async (key: string) => window.localStorage.getItem(key),
+        setItem: async (key: string, value: string) => { window.localStorage.setItem(key, value); },
+        removeItem: async (key: string) => { window.localStorage.removeItem(key); },
+      };
+    }
+    console.log('[Supabase] No localStorage (SSR), using in-memory storage');
+    const map = new Map<string, string>();
     return {
-      getItem: async (key: string) => window.localStorage.getItem(key),
-      setItem: async (key: string, value: string) => { window.localStorage.setItem(key, value); },
-      removeItem: async (key: string) => { window.localStorage.removeItem(key); },
+      getItem: async (key: string) => map.get(key) ?? null,
+      setItem: async (key: string, value: string) => { map.set(key, value); },
+      removeItem: async (key: string) => { map.delete(key); },
     };
   }
 
@@ -40,18 +48,18 @@ function createSecureStoreAdapter() {
     if (hasNewAPI) {
       console.log('[Supabase] Using expo-secure-store for native');
       return {
-        getItem: (key: string) => native.getItemAsync(key),
-        setItem: (key: string, value: string) => native.setItemAsync(key, value),
-        removeItem: (key: string) => native.deleteItemAsync(key),
+        getItem: (key: string) => native.getItemAsync(key, {}),
+        setItem: (key: string, value: string) => native.setItemAsync(key, value, {}),
+        removeItem: (key: string) => native.deleteItemAsync(key, {}),
       };
     }
     const hasOldAPI = typeof native.getValueWithKeyAsync === 'function';
     if (hasOldAPI) {
       console.log('[Supabase] Using expo-secure-store native module directly');
       return {
-        getItem: (key: string) => native.getValueWithKeyAsync(key),
-        setItem: (key: string, value: string) => native.setValueWithKeyAsync(value, key),
-        removeItem: (key: string) => native.deleteValueWithKeyAsync(key),
+        getItem: (key: string) => native.getValueWithKeyAsync(key, {}),
+        setItem: (key: string, value: string) => native.setValueWithKeyAsync(value, key, {}),
+        removeItem: (key: string) => native.deleteValueWithKeyAsync(key, {}),
       };
     }
   }

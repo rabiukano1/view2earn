@@ -14,6 +14,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
+import { requireOptionalNativeModule } from 'expo-modules-core';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -22,6 +23,33 @@ import { AnnouncementModal } from '@/components/announcement-modal';
 import { useTheme } from '@/hooks/use-theme';
 import { useAdReward } from '@/hooks/use-ad-reward';
 import { useMockData, Announcement } from '@/context/MockDataContext';
+import { useAuth } from '@/context/AuthContext';
+
+const BIO_PROMPTED_KEY = 'bio_prompted_v2';
+
+let _ss: { getItemAsync: (k: string) => Promise<string | null>; setItemAsync: (k: string, v: string) => Promise<void>; deleteItemAsync: (k: string) => Promise<void> } | null = null;
+function getSecureStore() {
+  if (_ss) return _ss;
+  const native = requireOptionalNativeModule('ExpoSecureStore');
+  if (!native) return null;
+  if (typeof native.getItemAsync === 'function') {
+    _ss = {
+      getItemAsync: (k: string) => native.getItemAsync(k, {}),
+      setItemAsync: (k: string, v: string) => native.setItemAsync(k, v, {}),
+      deleteItemAsync: (k: string) => native.deleteItemAsync(k, {}),
+    };
+    return _ss;
+  }
+  if (typeof native.getValueWithKeyAsync === 'function') {
+    _ss = {
+      getItemAsync: (k: string) => native.getValueWithKeyAsync(k, {}),
+      setItemAsync: (k: string, v: string) => native.setValueWithKeyAsync(v, k, {}),
+      deleteItemAsync: (k: string) => native.deleteValueWithKeyAsync(k, {}),
+    };
+    return _ss;
+  }
+  return null;
+}
 
 interface QuickAction {
   icon: keyof typeof Ionicons.glyphMap;
@@ -53,6 +81,7 @@ export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const { state, dispatch } = useMockData();
+  const { hasBiometricHardware, biometricsAvailable, enableBiometrics } = useAuth();
   const [adsLeft, setAdsLeft] = useState(3);
   const [showReward, setShowReward] = useState(false);
   const [showNoAdsToast, setShowNoAdsToast] = useState(false);
@@ -61,6 +90,43 @@ export default function DashboardScreen() {
   const [selectedAnn, setSelectedAnn] = useState<Announcement | null>(null);
   const slideScrollRef = useRef<ScrollView>(null);
   const slideTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      if (!hasBiometricHardware || biometricsAvailable) return;
+      try {
+        const SS = getSecureStore();
+        if (!SS) return;
+        const alreadyPrompted = await SS.getItemAsync(BIO_PROMPTED_KEY);
+        if (alreadyPrompted) return;
+        await SS.setItemAsync(BIO_PROMPTED_KEY, '1');
+
+        // Add a slight delay so the prompt isn't suppressed by screen transition animations
+        setTimeout(() => {
+          import('react-native').then(({ Alert }) => {
+            Alert.alert(
+              'Enable Biometric Login?',
+              'Would you like to sign in with your fingerprint or Face ID next time?',
+              [
+                { text: 'Not Now', style: 'cancel' },
+                {
+                  text: 'Enable',
+                  onPress: async () => {
+                    const ok = await enableBiometrics();
+                    if (ok) {
+                      Alert.alert('Success', 'Biometric login enabled!');
+                    }
+                  },
+                },
+              ]
+            );
+          });
+        }, 800);
+      } catch (err) {
+        console.warn('Biometric prompt error:', err);
+      }
+    })();
+  }, [hasBiometricHardware, biometricsAvailable, enableBiometrics]);
 
   const activeAnnouncements = state.announcements.filter(a => a.active);
 
