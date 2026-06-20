@@ -101,27 +101,24 @@ export default function DashboardScreen() {
         if (alreadyPrompted) return;
         await SS.setItemAsync(BIO_PROMPTED_KEY, '1');
 
-        // Add a slight delay so the prompt isn't suppressed by screen transition animations
-        setTimeout(() => {
-          import('react-native').then(({ Alert }) => {
-            Alert.alert(
-              'Enable Biometric Login?',
-              'Would you like to sign in with your fingerprint or Face ID next time?',
-              [
-                { text: 'Not Now', style: 'cancel' },
-                {
-                  text: 'Enable',
-                  onPress: async () => {
-                    const ok = await enableBiometrics();
-                    if (ok) {
-                      Alert.alert('Success', 'Biometric login enabled!');
-                    }
-                  },
+        import('react-native').then(({ Alert }) => {
+          Alert.alert(
+            'Enable Biometric Login?',
+            'Would you like to sign in with your fingerprint or Face ID next time?',
+            [
+              { text: 'Not Now', style: 'cancel' },
+              {
+                text: 'Enable',
+                onPress: async () => {
+                  const ok = await enableBiometrics();
+                  if (ok) {
+                    Alert.alert('Success', 'Biometric login enabled!');
+                  }
                 },
-              ]
-            );
-          });
-        }, 800);
+              },
+            ]
+          );
+        });
       } catch (err) {
         console.warn('Biometric prompt error:', err);
       }

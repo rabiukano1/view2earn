@@ -5,6 +5,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { requireOptionalNativeModule } from 'expo-modules-core';
+import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
 const BIO_ACCESS_TOKEN_KEY = 'bio_access_token';
@@ -275,6 +276,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           if (hasStoredTokens) {
             console.log('[Auth] Biometric tokens exist but auth failed/cancelled — routing to sign-in');
+            // User cancelled the prompt. We must clear biometric tokens so we don't infinite loop.
+            await disableBiometrics();
             await supabase.auth.signOut().catch(() => {});
             setSession(null);
             setUser(null);
@@ -378,14 +381,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setBiometricsAvailable(false);
         throw new Error('No biometric credentials saved');
       }
-      const { error } = await supabase.auth.setSession({
+
+      // First, prompt for hardware biometrics to verify the user
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Unlock View2Earn',
+        fallbackLabel: 'Use password instead',
+      });
+
+      if (!result.success) {
+        throw new Error('Biometric verification failed');
+      }
+
+      // If Supabase already has the session alive in memory (because we "Locked" instead of signed out)
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (currentSession && currentSession.access_token === accessToken) {
+        console.log('[Auth] Biometric sign-in successful (session restored from memory)');
+        setSession(currentSession);
+        setUser(currentSession.user);
+        router.replace('/(tabs)');
+        return;
+      }
+
+      // Otherwise, fallback to manually restoring it
+      const { error, data } = await supabase.auth.setSession({
         access_token: accessToken,
         refresh_token: refreshToken,
       });
+      
       if (error) {
         await disableBiometrics();
         throw error;
       }
+
+      setSession(data.session);
+      setUser(data.session?.user ?? null);
       console.log('[Auth] Biometric sign-in successful');
     } catch (e) {
       console.error('[Auth] Biometric sign-in failed:', e);
@@ -396,32 +425,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     console.log('[Auth] signOut called');
     setProfile(null);
+    setSession(null);
+    setUser(null);
     
-    // We intercept global.fetch to silently drop the Supabase /logout request.
-    // This is the ONLY foolproof way to ensure the session remains perfectly valid
-    // on the backend server so the user can log back in using their biometric tokens.
-    const originalFetch = global.fetch;
-    global.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = typeof input === 'string' ? input : (input && 'url' in input ? input.url : '');
-      if (typeof url === 'string' && url.includes('/logout')) {
-        console.log('[Auth] Dropped /logout request to preserve biometric session on server.');
-        return {
-          ok: true,
-          status: 200,
-          json: async () => ({}),
-          text: async () => '{}',
-          headers: { get: () => 'application/json' },
-        } as unknown as Response;
-      }
-      return originalFetch(input, init);
-    };
+    // If biometrics are enabled, we treat "Sign Out" as a "Lock".
+    // We DO NOT destroy the Supabase session, so biometric unlock will work flawlessly.
+    const SS = getSecureStore();
+    const hasBio = SS ? !!(await SS.getItemAsync(BIO_ACCESS_TOKEN_KEY).catch(() => null)) : false;
 
-    try {
-      await supabase.auth.signOut();
-    } catch (e) {
-      console.warn('[Auth] signOut warning:', e);
-    } finally {
-      global.fetch = originalFetch;
+    if (hasBio) {
+      console.log('[Auth] Biometrics enabled — locking app instead of destroying session');
+      // We don't call supabase.auth.signOut(). The session stays alive.
+      // AuthGate will see session is null but might not route because of hasRouted.
+      router.replace('/(splash)');
+    } else {
+      console.log('[Auth] Biometrics not enabled — destroying session');
+      await supabase.auth.signOut().catch(() => {});
+      router.replace('/(splash)');
     }
     
     console.log('[Auth] signOut complete');
