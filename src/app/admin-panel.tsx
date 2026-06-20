@@ -8,6 +8,7 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SmartHeader } from '@/components/smart-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { KeyboardAvoidingWrapper } from '@/components/keyboard-avoiding-wrapper';
 import { AnnouncementModal } from '@/components/announcement-modal';
 import { useMockData, PlatformType, UserStatus, FollowTask, Announcement, AdConfig, AIDynamicTask, AIQuiz, AIQuestion, AITaskType } from '@/context/MockDataContext';
 
@@ -135,6 +136,7 @@ function LockScreen({ passcode, setPasscode, handleAuth }: {
 }) {
   return (
     <View style={styles.lockRoot}>
+      <KeyboardAvoidingWrapper>
       <Animated.View entering={FadeInUp.duration(600).springify()} style={styles.lockContent}>
         <View style={styles.lockIconWrap}>
           <LinearGradient colors={[C.accent, C.accentDark]} style={styles.lockIconGradient}>
@@ -162,6 +164,7 @@ function LockScreen({ passcode, setPasscode, handleAuth }: {
           </LinearGradient>
         </Pressable>
       </Animated.View>
+      </KeyboardAvoidingWrapper>
     </View>
   );
 }
@@ -612,6 +615,7 @@ function DashboardTab({ state, dispatch }: { state: any; dispatch: any }) {
 
       <Modal visible={showDateModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
+          <KeyboardAvoidingWrapper headerOffset={0}>
           <Animated.View entering={FadeInUp.duration(300).springify()}>
             <View style={styles.modalContent}>
               <View style={[styles.modalHeader, { backgroundColor: C.blue + '08' }]}>
@@ -668,6 +672,7 @@ function DashboardTab({ state, dispatch }: { state: any; dispatch: any }) {
               </View>
             </View>
           </Animated.View>
+          </KeyboardAvoidingWrapper>
         </View>
       </Modal>
     </>
@@ -886,6 +891,7 @@ function TasksTab({ state, dispatch }: { state: any; dispatch: any }) {
 
       <Modal visible={showCreate} transparent animationType="fade">
         <View style={styles.modalOverlay}>
+          <KeyboardAvoidingWrapper headerOffset={0}>
           <Animated.View entering={FadeInUp.duration(300).springify()}>
             <View style={styles.modalContent}>
               <LinearGradient colors={[C.accent + '15', '#fff']} style={styles.modalHeader}>
@@ -941,6 +947,7 @@ function TasksTab({ state, dispatch }: { state: any; dispatch: any }) {
               </View>
             </View>
           </Animated.View>
+          </KeyboardAvoidingWrapper>
         </View>
       </Modal>
     </>
@@ -1110,6 +1117,7 @@ function UsersTab({ state, dispatch }: { state: any; dispatch: any }) {
 
       <Modal visible={!!selectedUser} transparent animationType="fade">
         <View style={styles.modalOverlay}>
+          <KeyboardAvoidingWrapper headerOffset={0}>
           <Animated.View entering={FadeInUp.duration(300).springify()}>
             <View style={styles.modalContent}>
               <LinearGradient colors={[C.blue + '12', '#fff']} style={styles.modalHeader}>
@@ -1137,13 +1145,14 @@ function UsersTab({ state, dispatch }: { state: any; dispatch: any }) {
               </View>
             </View>
           </Animated.View>
+          </KeyboardAvoidingWrapper>
         </View>
       </Modal>
     </>
   );
 }
 
-// ─── Payouts Tab ────────────────────────────────────────────────
+// ─── Payouts Tab ─────────────────────────────────────────────────
 function PayoutsTab({ state, dispatch }: { state: any; dispatch: any }) {
   const payouts = state.payoutRequests;
   if (payouts.length === 0) {
@@ -1790,6 +1799,7 @@ function AITab({ state, dispatch }: { state: any; dispatch: any }) {
 
       <Modal visible={showTaskForm} transparent animationType="fade" onRequestClose={() => { setShowTaskForm(false); resetTaskForm(); }}>
         <View style={styles.modalOverlay}>
+          <KeyboardAvoidingWrapper headerOffset={0}>
           <View style={[styles.modalContent, { maxHeight: '85%' }]}>
             <View style={[styles.modalHeader, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
               <AdminText bold style={{ fontSize: 18 }}>{editTask ? 'Edit AI Task' : 'Create AI Task'}</AdminText>
@@ -1833,11 +1843,13 @@ function AITab({ state, dispatch }: { state: any; dispatch: any }) {
               </View>
             </ScrollView>
           </View>
+          </KeyboardAvoidingWrapper>
         </View>
       </Modal>
 
       <Modal visible={showQuizForm} transparent animationType="fade" onRequestClose={() => { setShowQuizForm(false); resetQuizForm(); }}>
         <View style={styles.modalOverlay}>
+          <KeyboardAvoidingWrapper headerOffset={0}>
           <View style={[styles.modalContent, { maxHeight: '90%' }]}>
             <View style={[styles.modalHeader, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
               <AdminText bold style={{ fontSize: 18 }}>{editQuiz ? 'Edit Quiz' : 'Create Quiz'}</AdminText>
@@ -1899,6 +1911,7 @@ function AITab({ state, dispatch }: { state: any; dispatch: any }) {
               </View>
             </ScrollView>
           </View>
+          </KeyboardAvoidingWrapper>
         </View>
       </Modal>
     </>
@@ -2095,6 +2108,7 @@ function AnnouncementsTab({ state, dispatch }: { state: any; dispatch: any }) {
 
       <Modal visible={showCreate} transparent animationType="fade">
         <View style={styles.modalOverlay}>
+          <KeyboardAvoidingWrapper headerOffset={0}>
           <Animated.View entering={FadeInUp.duration(300).springify()} style={{ maxHeight: screenHeight - Math.max(40, insets.top + 20) - insets.bottom - 20, marginHorizontal: 24, marginTop: Math.max(40, insets.top + 20) }}>
             <View style={[styles.modalContent, { maxHeight: '100%' }]}>
               <LinearGradient colors={[C.purple + '15', '#fff']} style={styles.modalHeader}>
@@ -2301,6 +2315,7 @@ function AnnouncementsTab({ state, dispatch }: { state: any; dispatch: any }) {
               />
             </View>
           </Animated.View>
+          </KeyboardAvoidingWrapper>
         </View>
       </Modal>
     </>
@@ -2448,6 +2463,7 @@ export default function AdminPanelScreen() {
 
       <TabBar tabs={TABS} activeTab={activeTab} onSelect={setActiveTab} />
 
+      <KeyboardAvoidingWrapper>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
@@ -2469,9 +2485,11 @@ export default function AdminPanelScreen() {
           </Pressable>
         )}
       </ScrollView>
+      </KeyboardAvoidingWrapper>
 
       <Modal visible={showVerifyModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
+          <KeyboardAvoidingWrapper headerOffset={0}>
           <Animated.View entering={FadeInUp.duration(300).springify()}>
             <View style={styles.modalContent}>
               <LinearGradient colors={[C.accent + '12', '#fff']} style={styles.modalHeader}>
@@ -2500,6 +2518,7 @@ export default function AdminPanelScreen() {
               </View>
             </View>
           </Animated.View>
+          </KeyboardAvoidingWrapper>
         </View>
       </Modal>
 

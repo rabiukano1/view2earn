@@ -9,6 +9,7 @@ import Animated, { FadeInDown, FadeInUp, useAnimatedStyle, useSharedValue, withT
 import { SmartHeader } from '@/components/smart-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { KeyboardAvoidingWrapper } from '@/components/keyboard-avoiding-wrapper';
 import { useTheme } from '@/hooks/use-theme';
 import { useMockData, PlatformType, FollowerOrder, FollowTask } from '@/context/MockDataContext';
 
@@ -160,6 +161,7 @@ export default function BuyFollowersScreen() {
         showBalance
       />
 
+      <KeyboardAvoidingWrapper>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 220 }]}
@@ -420,6 +422,7 @@ export default function BuyFollowersScreen() {
         </Animated.View>
 
       </ScrollView>
+      </KeyboardAvoidingWrapper>
 
       <LinearGradient
         colors={[theme.background + '00', theme.background]}

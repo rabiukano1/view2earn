@@ -8,6 +8,7 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SmartHeader } from '@/components/smart-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { KeyboardAvoidingWrapper } from '@/components/keyboard-avoiding-wrapper';
 import { useTheme } from '@/hooks/use-theme';
 import { useMockData, PlatformType, MOCK_FACEBOOK_PAGES, FacebookPage, TikTokProfileData } from '@/context/MockDataContext';
 import { extractUsernameFromUrl, scrapeUserTikTokProfileWithRetry } from '@/services/tiktok-scraper';
@@ -196,6 +197,7 @@ export default function SocialConnectScreen() {
         }
       />
 
+      <KeyboardAvoidingWrapper>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
@@ -302,6 +304,7 @@ export default function SocialConnectScreen() {
           </View>
         </ThemedView>
       </ScrollView>
+      </KeyboardAvoidingWrapper>
 
       {verifyPlatform && (
         <Animated.View
@@ -309,6 +312,7 @@ export default function SocialConnectScreen() {
           style={styles.verifyOverlay}
         >
           <Pressable style={styles.verifyBackdrop} onPress={closeVerification} />
+          <KeyboardAvoidingWrapper headerOffset={0}>
           <Animated.View
             entering={FadeInUp.duration(350).springify().damping(18)}
             style={[styles.verifyModal, { paddingBottom: insets.bottom + 16 }]}
@@ -742,6 +746,7 @@ export default function SocialConnectScreen() {
               )}
             </LinearGradient>
           </Animated.View>
+          </KeyboardAvoidingWrapper>
         </Animated.View>
       )}
     </View>

@@ -9,6 +9,7 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SmartHeader } from '@/components/smart-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { KeyboardAvoidingWrapper } from '@/components/keyboard-avoiding-wrapper';
 import { useTheme } from '@/hooks/use-theme';
 import { useMockData, PlatformType } from '@/context/MockDataContext';
 import { useAuth } from '@/context/AuthContext';
@@ -366,6 +367,7 @@ export default function ProfileScreen() {
 
       <Modal visible={showPasscode} transparent animationType="fade" onRequestClose={() => setShowPasscode(false)}>
         <View style={styles.modalOverlay}>
+          <KeyboardAvoidingWrapper headerOffset={0}>
           <Animated.View entering={FadeInUp.duration(300).springify()} style={styles.passcodeModal}>
             <View style={styles.passcodeHeader}>
               <View style={[styles.passcodeIconWrap, { backgroundColor: '#2ECC7120' }]}>
@@ -391,6 +393,7 @@ export default function ProfileScreen() {
               <ThemedText type="smallBold" themeColor="textSecondary">Cancel</ThemedText>
             </Pressable>
           </Animated.View>
+          </KeyboardAvoidingWrapper>
         </View>
       </Modal>
 
