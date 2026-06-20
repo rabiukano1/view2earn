@@ -1,6 +1,15 @@
-import { createContext, useContext, useReducer, useEffect, useRef, ReactNode } from 'react';
+import { createContext, useContext, useReducer, useEffect, useRef, useState, ReactNode } from 'react';
 import { loadAdConfig, saveAdConfig } from '@/utils/persistence';
 import { useAuth } from '@/context/AuthContext';
+import { profileService } from '@/services/profile.service';
+import { connectedAccountService } from '@/services/accounts.service';
+import { orderService } from '@/services/orders.service';
+import { followTaskService } from '@/services/tasks.service';
+import { transactionService } from '@/services/transactions.service';
+import { announcementService } from '@/services/announcements.service';
+import { challengeService } from '@/services/challenges.service';
+import { payoutService } from '@/services/payout.service';
+import { getErrorMessage } from '@/utils/error-handler';
 
 export type PlatformType = 'facebook' | 'tiktok' | 'telegram' | 'youtube';
 export type OrderStatus = 'pending' | 'in-progress' | 'completed' | 'cancelled';
@@ -273,7 +282,8 @@ type MockAction =
   | { type: 'UPDATE_TIKTOK_PROFILE'; accountId: string; profile: Partial<TikTokProfileData> }
   | { type: 'SET_VERIFIED_FOLLOW_RESULT'; taskId: string; verified: boolean; reward?: number }
   | { type: 'RECORD_VERIFICATION_ATTEMPT'; taskId: string; targetUsername: string; passed: boolean }
-  | { type: 'SET_AUTH_USER'; user: Partial<MockUser> };
+  | { type: 'SET_AUTH_USER'; user: Partial<MockUser> }
+  | { type: 'INIT_STATE'; state: Partial<MockDataState> };
 
 const PLATFORM_USERNAMES: Record<PlatformType, string[]> = {
   facebook: ['demo.user', 'john.doe', 'jane.smith'],
@@ -325,6 +335,8 @@ const initialOrders: FollowerOrder[] = [
 
 function mockReducer(state: MockDataState, action: MockAction): MockDataState {
   switch (action.type) {
+    case 'INIT_STATE':
+      return { ...state, ...action.state };
     case 'CONNECT_ACCOUNT': {
       const used = state.connectedAccounts.find(a => a.platform === action.platform);
       if (used) return state;
@@ -651,6 +663,7 @@ function mockReducer(state: MockDataState, action: MockAction): MockDataState {
 const MockDataContext = createContext<{
   state: MockDataState;
   dispatch: React.Dispatch<MockAction>;
+  initialized: boolean;
 } | null>(null);
 
 const MOCK_USERS: MockUser[] = [
@@ -659,7 +672,6 @@ const MOCK_USERS: MockUser[] = [
   { id: 'u-3', email: 'carol@demo.com', fullName: 'Carol Davis', balance: 150, isAdmin: false, status: 'active', createdAt: '2026-04-05T14:00:00Z', totalEarned: 1200, totalSpent: 1050 },
   { id: 'u-4', email: 'dan@demo.com', fullName: 'Dan Wilson', balance: 0, isAdmin: false, status: 'suspended', createdAt: '2026-04-02T09:00:00Z', totalEarned: 800, totalSpent: 800 },
   { id: 'u-5', email: 'eve@demo.com', fullName: 'Eve Martinez', balance: 4100, isAdmin: false, status: 'active', createdAt: '2026-03-28T16:00:00Z', totalEarned: 6200, totalSpent: 2100 },
-  { id: 'u-6', email: 'demo@view2earn.com', fullName: 'Demo User', balance: 1250, isAdmin: true, status: 'active', createdAt: '2026-03-15T12:00:00Z', totalEarned: 3000, totalSpent: 1750 },
 ];
 
 const MOCK_PAYOUTS: PayoutRequest[] = [
@@ -672,7 +684,7 @@ const MOCK_PAYOUTS: PayoutRequest[] = [
 const SEED_ANNOUNCEMENTS: Announcement[] = [
   {
     id: 'ann-1',
-    title: '🚀 Welcome to View2Earn!',
+    title: 'Welcome to View2Earn!',
     subtitle: 'Start earning rewards today',
     content: 'Complete social tasks, watch ads, and earn PTS points. Redeem for PayPal, Crypto, and more! Get started with a 100 PTS welcome bonus.',
     cta: 'Start Earning',
@@ -682,7 +694,7 @@ const SEED_ANNOUNCEMENTS: Announcement[] = [
   },
   {
     id: 'ann-2',
-    title: '⚡ Double Points Weekend',
+    title: 'Double Points Weekend',
     subtitle: 'Earn 2x on all follow tasks',
     content: 'This weekend only! Earn double PTS on every follow task you complete. Invite friends to earn even more.',
     cta: 'View Tasks',
@@ -692,7 +704,7 @@ const SEED_ANNOUNCEMENTS: Announcement[] = [
   },
   {
     id: 'ann-3',
-    title: '🎬 YouTube Now Available',
+    title: 'YouTube Now Available',
     subtitle: 'Connect & earn on YouTube',
     content: 'You can now connect your YouTube channel and complete follow tasks. Earn bonus PTS for your first YouTube task.',
     cta: 'Connect Now',
@@ -703,7 +715,7 @@ const SEED_ANNOUNCEMENTS: Announcement[] = [
   },
   {
     id: 'ann-4',
-    title: '🎉 Referral Bonus Active',
+    title: 'Referral Bonus Active',
     subtitle: '100 PTS per referral',
     content: 'Invite your friends to join View2Earn and earn 100 PTS for each referral. No limit - refer as many as you want!',
     cta: 'Refer Now',
@@ -804,6 +816,10 @@ const INITIAL_COMPLETED_PER_PLATFORM: Record<PlatformType, string[]> = {
   youtube: [],
 };
 
+const supabaseConfigured = () => {
+  return !!(process.env.EXPO_PUBLIC_SUPABASE_URL && process.env.EXPO_PUBLIC_SUPABASE_KEY);
+};
+
 const initialState: MockDataState = {
   user: {
     id: 'mock-user-1',
@@ -832,13 +848,160 @@ const initialState: MockDataState = {
 };
 
 export function MockDataProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(mockReducer, initialState);
+  const [state, rawDispatch] = useReducer(mockReducer, initialState);
+  const [initialized, setInitialized] = useState(false);
   const loadedRef = useRef(false);
   const { user: authUser, profile } = useAuth();
+  const initRef = useRef(false);
+
+  useEffect(() => {
+    if (authUser && !initRef.current && supabaseConfigured()) {
+      initRef.current = true;
+      (async () => {
+        try {
+          const [dbProfile, dbAccounts, dbOrders, dbCompletedTasks, dbTransactions, dbAnnouncements, dbPayouts, dbChallenges] = await Promise.all([
+            profileService.getById(authUser.id).catch(() => null),
+            connectedAccountService.getByUserId(authUser.id).catch(() => []),
+            orderService.getByUserId(authUser.id).catch(() => []),
+            followTaskService.getCompletedByUser(authUser.id).catch(() => []),
+            transactionService.getByUserId(authUser.id).catch(() => []),
+            announcementService.getActive().catch(() => []),
+            payoutService.getByUserId(authUser.id).catch(() => []),
+            challengeService.getToday(authUser.id).catch(() => null),
+          ]);
+
+          const dbTasks = await followTaskService.getActive().catch(() => null);
+          if (dbTasks) {
+            const supabaseFollowTasks: FollowTask[] = dbTasks.map(t => ({
+              id: t.id,
+              platform: t.platform as PlatformType,
+              channelName: t.channel_name,
+              category: t.category ?? '',
+              reward: Math.round((t.reward ?? 0.05) * 1000),
+              followers: t.followers ?? '',
+              pageUrl: t.page_url ?? undefined,
+            }));
+            if (supabaseFollowTasks.length > 0) {
+              rawDispatch({ type: 'INIT_STATE', state: { followTasks: supabaseFollowTasks } });
+            }
+          }
+
+          const supabaseAccounts: ConnectedAccount[] = dbAccounts.map(a => ({
+            id: a.id,
+            platform: a.platform as PlatformType,
+            username: a.username,
+            displayName: a.display_name ?? a.username,
+            isConnected: a.is_connected,
+            followersCount: a.followers_count,
+            followingCount: a.following_count,
+            pageId: a.page_id ?? undefined,
+            pageAccessToken: a.page_access_token ?? undefined,
+            pageUrl: a.page_url ?? undefined,
+            profileUrl: a.profile_url ?? undefined,
+            avatarUrl: a.avatar_url ?? undefined,
+          }));
+
+          const supabaseOrders: FollowerOrder[] = dbOrders.map(o => ({
+            id: o.id,
+            platform: o.platform as PlatformType,
+            followers: o.followers,
+            cost: Math.round(o.cost * 1000),
+            status: o.status as OrderStatus,
+            createdAt: o.created_at,
+            estimatedDelivery: o.estimated_delivery ?? '',
+            progress: o.progress,
+            pageId: o.page_id ?? undefined,
+            pageUrl: o.page_url ?? undefined,
+          }));
+
+          const completedIds = dbCompletedTasks.map(c => c.task_id);
+          const totalEarned = dbTransactions
+            .filter(t => t.type === 'credit')
+            .reduce((sum, t) => sum + Math.round(t.amount * 1000), 0);
+
+          rawDispatch({
+            type: 'INIT_STATE',
+            state: {
+              user: {
+                id: authUser.id,
+                email: authUser.email ?? '',
+                fullName: profile?.full_name ?? authUser.user_metadata?.full_name ?? '',
+                balance: Math.round((dbProfile?.balance ?? 0) * 1000),
+                isAdmin: dbProfile?.is_admin ?? false,
+                avatarUrl: dbProfile?.avatar_url ?? undefined,
+                status: (dbProfile?.status as UserStatus) ?? 'active',
+                createdAt: dbProfile?.created_at,
+                totalEarned,
+              },
+              balance: Math.round((dbProfile?.balance ?? 0) * 1000),
+              connectedAccounts: supabaseAccounts,
+              orders: supabaseOrders,
+              completedFollowTasks: completedIds,
+              announcements: dbAnnouncements.length > 0
+                ? dbAnnouncements.map(a => ({
+                    id: a.id,
+                    title: a.title,
+                    subtitle: a.subtitle ?? undefined,
+                    imageUrl: a.image_url ?? undefined,
+                    content: a.content ?? '',
+                    link: a.link ?? undefined,
+                    cta: a.cta ?? undefined,
+                    active: a.active,
+                    createdAt: a.created_at,
+                    color: a.color ?? undefined,
+                  }))
+                : SEED_ANNOUNCEMENTS,
+            },
+          });
+
+          if (dbChallenges) {
+            rawDispatch({
+              type: 'INIT_STATE',
+              state: {
+                dailyChallenges: [{
+                  date: dbChallenges.date,
+                  completedTaskIds: dbChallenges.completed_task_ids ?? [],
+                  completedQuizIds: dbChallenges.completed_quiz_ids ?? [],
+                  totalEarned: Math.round((dbChallenges.total_earned ?? 0) * 1000),
+                }],
+              },
+            });
+          }
+
+          if (dbPayouts.length > 0) {
+            rawDispatch({
+              type: 'INIT_STATE',
+              state: {
+                payoutRequests: dbPayouts.map(p => ({
+                  id: p.id,
+                  userId: p.user_id,
+                  userName: p.user_name ?? '',
+                  amount: Math.round(p.amount * 1000),
+                  method: p.method,
+                  address: p.address,
+                  status: p.status as PayoutStatus,
+                  createdAt: p.created_at,
+                })),
+              },
+            });
+          }
+        } catch (err) {
+          console.warn('[MockData] Supabase sync failed, using mock data:', getErrorMessage(err));
+        }
+      })().finally(() => {
+        setInitialized(true);
+      });
+    } else if (!supabaseConfigured()) {
+      setInitialized(true);
+    } else {
+      initRef.current = true;
+      setInitialized(true);
+    }
+  }, [authUser?.id, profile?.full_name, profile?.avatar_url]);
 
   useEffect(() => {
     if (authUser) {
-      dispatch({
+      rawDispatch({
         type: 'SET_AUTH_USER',
         user: {
           id: authUser.id,
@@ -853,7 +1016,7 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     loadAdConfig().then(config => {
       if (config) {
-        dispatch({ type: 'ADMIN_UPDATE_AD_CONFIG', adConfig: config });
+        rawDispatch({ type: 'ADMIN_UPDATE_AD_CONFIG', adConfig: config });
       }
       loadedRef.current = true;
     });
@@ -865,7 +1028,7 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
   }, [state.adConfig]);
 
   return (
-    <MockDataContext.Provider value={{ state, dispatch }}>
+    <MockDataContext.Provider value={{ state, dispatch: rawDispatch, initialized }}>
       {children}
     </MockDataContext.Provider>
   );

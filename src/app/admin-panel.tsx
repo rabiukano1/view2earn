@@ -1405,7 +1405,7 @@ function AdsControlTab({ state, dispatch }: { state: any; dispatch: any }) {
   };
 
   const getSectionStatus = (section: keyof AdConfig) => {
-    const config = adConfig[section] as Record<string, string>;
+    const config = adConfig[section] as unknown as Record<string, string>;
     const values = Object.values(config);
     const setCount = values.filter(v => v).length;
     if (setCount === 0) return { label: 'Not Configured', color: C.textMuted, icon: 'alert-circle-outline' as const };
@@ -1416,7 +1416,7 @@ function AdsControlTab({ state, dispatch }: { state: any; dispatch: any }) {
   const renderSection = (title: string, icon: keyof typeof Ionicons.glyphMap, color: string, section: keyof AdConfig, fields: { key: string; label: string; placeholder: string }[]) => {
     const status = getSectionStatus(section);
     if (!editMode) {
-      const config = adConfig[section] as Record<string, string>;
+    const config = adConfig[section] as unknown as Record<string, string>;
       return (
         <AdminCard key={title}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
@@ -1485,7 +1485,7 @@ function AdsControlTab({ state, dispatch }: { state: any; dispatch: any }) {
 
   const allConfigured = useMemo(() => {
     return Object.values(adConfig).every(section =>
-      Object.values(section as Record<string, string>).some(v => v)
+      Object.values(section as unknown as Record<string, string>).some(v => v)
     );
   }, [adConfig]);
 

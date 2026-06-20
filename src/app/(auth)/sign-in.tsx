@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { StyleSheet, View, TextInput, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
+import { useState, useCallback } from 'react';
+import { StyleSheet, View, TextInput, KeyboardAvoidingView, Platform, Pressable, Alert } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,36 +11,63 @@ import { useAuth } from '@/context/AuthContext';
 
 const GREEN = '#2ECC71';
 const GREEN_DARK = '#27ae60';
+const BIO_PROMPTED_KEY = 'bio_prompted';
+
+let _ss: { getItemAsync: (k: string) => Promise<string | null>; setItemAsync: (k: string, v: string) => Promise<void>; deleteItemAsync: (k: string) => Promise<void> } | null = null;
+function getSecureStore() {
+  if (_ss) return _ss;
+  const native = requireOptionalNativeModule('ExpoSecureStore');
+  if (!native) return null;
+  if (typeof native.getItemAsync === 'function') { _ss = native; return _ss; }
+  if (typeof native.getValueWithKeyAsync === 'function') {
+    _ss = {
+      getItemAsync: (k: string) => native.getValueWithKeyAsync(k),
+      setItemAsync: (k: string, v: string) => native.setValueWithKeyAsync(v, k),
+      deleteItemAsync: (k: string) => native.deleteValueWithKeyAsync(k),
+    };
+    return _ss;
+  }
+  return null;
+}
 
 function getLA() {
   return requireOptionalNativeModule('ExpoLocalAuthentication');
 }
 
 export default function SignIn() {
-  const { signIn, signInWithGoogle } = useAuth();
+  const { signIn, signInWithGoogle, signInWithBiometrics, biometricsAvailable, enableBiometrics, hasBiometricHardware } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [bioAvailable, setBioAvailable] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const LA = getLA();
-        if (!LA) return;
-        const hasHardware = await LA.hasHardwareAsync();
-        if (hasHardware) {
-          const enrolled = await LA.isEnrolledAsync();
-          setBioAvailable(enrolled);
-        }
-      } catch {
-        setBioAvailable(false);
-      }
-    })();
-  }, []);
+  const promptEnableBiometrics = useCallback(async () => {
+    if (!hasBiometricHardware || biometricsAvailable) return;
+    try {
+      const SS = getSecureStore();
+      if (!SS) return;
+      const alreadyPrompted = await SS.getItemAsync(BIO_PROMPTED_KEY);
+      if (alreadyPrompted) return;
+      await SS.setItemAsync(BIO_PROMPTED_KEY, '1');
+    } catch {
+      return;
+    }
+    Alert.alert(
+      'Enable Biometric Login?',
+      'Would you like to sign in with your fingerprint next time?',
+      [
+        { text: 'Not Now', style: 'cancel' },
+        {
+          text: 'Enable',
+          onPress: async () => {
+            await enableBiometrics();
+          },
+        },
+      ]
+    );
+  }, [hasBiometricHardware, biometricsAvailable, enableBiometrics]);
 
   const handleSignIn = async () => {
     setError('');
@@ -50,26 +77,36 @@ export default function SignIn() {
     if (result.error) {
       setError(result.error);
     } else {
+      promptEnableBiometrics();
       router.replace('/(tabs)');
     }
   };
 
   const handleBiometric = useCallback(async () => {
     try {
+      if (!biometricsAvailable) {
+        Alert.alert('Not Set Up', 'Enable biometric login from your Profile settings first.');
+        return;
+      }
       const LA = getLA();
       if (!LA) return;
       const result = await LA.authenticateAsync({
-        promptMessage: 'Sign in to view2earn',
+        promptMessage: 'Unlock your account',
         fallbackLabel: 'Use password instead',
         disableDeviceFallback: false,
       });
       if (result.success) {
+        await signInWithBiometrics();
         router.replace('/(tabs)');
       }
-    } catch {
-      setBioAvailable(false);
+    } catch (e: any) {
+      if (e?.message !== 'Options canceled by user') {
+        setError('Biometric sign-in failed. Sign in manually.');
+      }
     }
-  }, []);
+  }, [signInWithBiometrics, biometricsAvailable]);
+
+  const showBioButton = hasBiometricHardware;
 
   return (
     <LinearGradient colors={['#000000', '#0a0a0f', '#000000']} style={styles.container}>
@@ -154,10 +191,10 @@ export default function SignIn() {
             </ThemedText>
           </Pressable>
 
-          {bioAvailable && (
+          {showBioButton && (
             <Pressable onPress={handleBiometric} style={styles.bioButton}>
               <Ionicons name="finger-print" size={24} color={GREEN} />
-              <ThemedText style={styles.bioText}>Sign in with biometrics</ThemedText>
+              <ThemedText style={styles.bioText}>Unlock with biometrics</ThemedText>
             </Pressable>
           )}
         </Animated.View>

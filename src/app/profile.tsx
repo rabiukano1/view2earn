@@ -44,7 +44,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const { state, dispatch } = useMockData();
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, enableBiometrics, disableBiometrics, biometricsAvailable, hasBiometricHardware } = useAuth();
   const [adminTapCount, setAdminTapCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
@@ -82,6 +82,23 @@ export default function ProfileScreen() {
       setPasscode('');
     }
   }, [passcode, state.user.email]);
+
+  const handleBioToggle = useCallback(() => {
+    if (biometricsAvailable) {
+      Alert.alert('Disable Biometrics', 'Are you sure you want to remove biometric login?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Disable', style: 'destructive', onPress: () => disableBiometrics() },
+      ]);
+    } else {
+      enableBiometrics().then((ok) => {
+        if (ok) {
+          Alert.alert('Enabled', 'You can now sign in with your fingerprint.');
+        } else {
+          Alert.alert('Error', 'Failed to save biometric credentials. No active session.');
+        }
+      });
+    }
+  }, [biometricsAvailable, disableBiometrics, enableBiometrics]);
 
   const handlePickPhoto = useCallback((avatarUrl: string) => {
     dispatch({ type: 'SET_AVATAR', avatarUrl });
@@ -129,7 +146,7 @@ export default function ProfileScreen() {
       <SmartHeader
         title="Profile"
         rightContent={
-          <Pressable onPress={() => {}} style={styles.settingsBtn}>
+          <Pressable onPress={() => router.push('/security')} style={styles.settingsBtn}>
             <Ionicons name="settings-outline" size={22} color={theme.textSecondary} />
           </Pressable>
         }
@@ -268,6 +285,18 @@ export default function ProfileScreen() {
                 <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
               </Pressable>
             ))}
+            {hasBiometricHardware && (
+              <Pressable
+                onPress={handleBioToggle}
+                style={({ pressed }) => [styles.menuRow, { borderTopWidth: 1, borderTopColor: theme.textSecondary + '15' }, pressed && { opacity: 0.8 }]}
+              >
+                <View style={[styles.menuIcon, { backgroundColor: (biometricsAvailable ? '#2ECC71' : theme.textSecondary) + '20' }]}>
+                  <Ionicons name="finger-print" size={20} color={biometricsAvailable ? '#2ECC71' : theme.textSecondary} />
+                </View>
+                <ThemedText type="smallBold" style={styles.menuLabel}>Biometric Login</ThemedText>
+                <Ionicons name={biometricsAvailable ? 'toggle' : 'toggle-outline'} size={22} color={biometricsAvailable ? '#2ECC71' : theme.textSecondary} />
+              </Pressable>
+            )}
           </ThemedView>
         </Animated.View>
 
@@ -364,6 +393,7 @@ export default function ProfileScreen() {
           </Animated.View>
         </View>
       </Modal>
+
     </View>
   );
 }
